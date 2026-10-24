@@ -102,3 +102,19 @@ def test_out_until_restart_waits_for_placement_and_kick():
     assert flag[10] == 0           # still in play
     assert flag[30] == 1 and flag[80] == 1 and flag[250] == 1
     assert flag[320] == 0          # restart taken
+
+
+def test_seen_neighbours():
+    from sb import ballnet
+    seen = np.array([True, False, False, True, False])
+    last, nxt = ballnet.seen_neighbours(seen)
+    assert last.tolist() == [-1, 0, 0, 0, 3]
+    assert nxt.tolist() == [3, 3, 3, -1, -1]
+
+
+def test_context_features_flags_far_context():
+    from sb import ballnet
+    ball = np.array([[10.0, 20.0], [np.nan, np.nan]] + [[50.0, 30.0]] * 1000, dtype=np.float32)
+    ctx = ballnet.context_features(ball, np.array([1]), np.array([0]), np.array([1001]))
+    assert ctx[0, 3] == 1.0            # last seen 1 frame ago: known
+    assert ctx[0, 7] == 0.0            # next seen 40 s later: beyond MAX_CONTEXT_S -> unknown

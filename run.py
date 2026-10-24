@@ -4,6 +4,8 @@
     python run.py check                 # sanity checks on the data (counts, ball visibility)
     python run.py baseline --window 50  # v0: reproduce the organisers' baseline
     python run.py v1                    # v1: dead-ball detection + sticky possession (HMM)
+    python run.py ball-train --cv       # v2: train the ball model (GPU if available), validate
+    python run.py v2                    # v2: v1 + reconstructed ball
     python run.py score                 # score every CSV in submissions/ (public 5 min only)
     python run.py score -- --bootstrap 1000   # with confidence intervals
     python run.py validate FILE         # the organisers' exact validation checks
@@ -18,7 +20,7 @@ import time
 
 import numpy as np
 
-from sb import atd, baseline, paths, submission, v1
+from sb import atd, baseline, paths, submission, v1, v2
 
 
 def cmd_cache(args):
@@ -67,6 +69,69 @@ def cmd_v1(args):
     submission.validate(path)
 
 
+def cmd_ball_train(args):
+    import json
+    import os
+    from sb import ballnet
+    track = atd.Tracking()
+    halves = {1: ballnet.half_frames(track, 1), 2: ballnet.half_frames(track, 2)}
+    report = {"steps": args.steps, "batch": args.batch}
+    if args.train_half:
+        # one half only, early-stopped on the other: a model that has never seen the other half,
+        # for leak-free tests on it (e.g. scripts/mask_test.py on the public window, half 1)
+        val_h = 3 - args.train_half
+        model = ballnet.train(track, halves[args.train_half], steps=args.steps, batch=args.batch,
+                              val_frames=halves[val_h])
+        out = os.path.join(paths.CACHE_DIR, "ballnet_half{}.pt".format(args.train_half))
+        ballnet.save(model, out)
+        print("saved {} (best step {})".format(out, model.best_step))
+        return
+    final_steps = args.steps
+    if args.cv:
+        best_steps = []
+        for train_h, val_h in ((1, 2), (2, 1)):
+            print("cross-validation: train half {}, validate half {}".format(train_h, val_h))
+            model = ballnet.train(track, halves[train_h], steps=args.steps, batch=args.batch,
+                                  val_frames=halves[val_h])
+            res = ballnet.evaluate(model, track, halves[val_h])
+            res["best_step"] = model.best_step
+            best_steps.append(model.best_step)
+            report["cv_train{}_val{}".format(train_h, val_h)] = res
+            print(json.dumps(res, indent=1))
+        # early stopping chose these; the final model (no held-out half left) uses their mean
+        final_steps = int(np.mean(best_steps))
+    report["final_steps"] = final_steps
+    print("final model: train on both halves, {} steps".format(final_steps))
+    model = ballnet.train(track, np.concatenate([halves[1], halves[2]]),
+                          steps=final_steps, batch=args.batch)
+    ballnet.save(model)
+    ball, sigma, source = ballnet.reconstruct(model, track)
+    out = os.path.join(paths.CACHE_DIR, "ball_reconstructed.npz")
+    np.savez(out, ball=ball, sigma=sigma, source=source)
+    log = os.path.join(paths.REPO, "experiments", "ballnet_{}.json".format(time.strftime("%Y%m%d_%H%M")))
+    with open(log, "w") as handle:
+        json.dump(report, handle, indent=1)
+    print("saved model to {}, reconstruction to {}, report to {}".format(
+        ballnet.model_path(), out, log))
+
+
+def cmd_v2(args):
+    import os
+    path = os.path.join(paths.CACHE_DIR, "ball_reconstructed.npz")
+    if not os.path.isfile(path):
+        sys.exit("No reconstructed ball yet. Run: python run.py ball-train --cv")
+    z = np.load(path)
+    track = atd.Tracking()
+    labels = v2.run(track, z["ball"], z["sigma"])
+    out = submission.write(labels, "v2_ballnet")
+    stats = submission.summary(labels)
+    graded = sum(stats[k] for k in "HAD")
+    print("wrote", out)
+    print("{}  D share {:.1f}%  mean possession {:.1f}s".format(
+        stats, 100 * stats["D"] / graded, (stats["H"] + stats["A"]) / paths.FPS / stats["possessions"]))
+    submission.validate(out)
+
+
 def compare_reference(labels):
     """v0 with window 50 must match the organisers' published baseline on graded frames."""
     import pandas as pd
@@ -94,6 +159,14 @@ def main():
     p.add_argument("--window", type=int, default=50)
     p.set_defaults(func=cmd_baseline)
     sub.add_parser("v1").set_defaults(func=cmd_v1)
+    p = sub.add_parser("ball-train")
+    p.add_argument("--steps", type=int, default=20000)
+    p.add_argument("--batch", type=int, default=512)
+    p.add_argument("--cv", action="store_true", help="also train/validate across halves (3x time)")
+    p.add_argument("--train-half", type=int, choices=(1, 2),
+                   help="train on one half only -> cache/ballnet_half<N>.pt (for leak-free tests)")
+    p.set_defaults(func=cmd_ball_train)
+    sub.add_parser("v2").set_defaults(func=cmd_v2)
     p = sub.add_parser("score")
     p.add_argument("extra", nargs=argparse.REMAINDER, help="passed to run_evaluation.py")
     p.set_defaults(func=cmd_score)

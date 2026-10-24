@@ -11,7 +11,10 @@ pip install -r requirements.txt
 python run.py cache                 # parse ATD sekali -> cache/tactical_atd.npz (~20 dtk)
 python run.py check                 # cek data
 python run.py baseline --window 50  # v0, harus cocok 100% dengan baseline panitia
-python run.py v1                    # v1, submission saat ini
+python run.py v1                    # v1, cadangan
+python run.py ball-train --cv       # v2: latih model rekonstruksi bola (GPU), validasi silang babak
+python run.py v2                    # v2: v1 + bola hasil rekonstruksi -- SUBMISSION SAAT INI
+python run.py ball-train --train-half 2 && python scripts/mask_test.py   # uji v1 vs v2 bebas bocor
 python run.py score                 # skor semua CSV di submissions/ (GT publik 5 menit)
 python run.py validate FILE         # validator resmi panitia
 python -m pytest -q                 # tes cepat, tanpa data
@@ -29,6 +32,10 @@ Data dicari di: `MTAH_DATA_DIR` -> `./data` -> `../Dataset Drive`.
 - `sb/tagging.py` — Smart Tagging ke frame video.
 - `sb/hmm.py` — HMM 3 state (H/A/D) + Viterbi.
 - `sb/v1.py` — v1: semua parameter di `PARAMS`, masing-masing dengan alasan fisiknya.
+- `sb/ballnet.py` — model rekonstruksi bola (transformer kecil atas set pemain, self-supervised
+  dengan celah sintetis dari distribusi celah asli; output posisi + ketidakpastian).
+- `sb/v2.py` — v1 + bola rekonstruksi untuk bukti kontrol tim (bola mati tetap pakai bola asli).
+- PyTorch dipasang terpisah (versi CUDA dari pytorch.org), butuh Python <= 3.14.
 - `games.py`, `evaluation/` — salinan kode panitia (MIT), JANGAN diubah.
 - `experiments/` — catatan eksperimen (konfigurasi + skor), satu file per eksperimen.
 - `submissions/`, `cache/`, `data/` — tidak di-commit.

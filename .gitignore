@@ -1,0 +1,17 @@
+# Match data: licensed for the competition only, never committed
+data/
+*.mp4
+cache/
+submissions/
+experiments/scoreboard/
+
+# Python / editors
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ipynb_checkpoints/
+.vscode/
+.idea/
+.DS_Store

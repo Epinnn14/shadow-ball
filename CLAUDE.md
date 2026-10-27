@@ -18,6 +18,7 @@ python run.py v3                    # v3: v2 + pelanggaran/peluit (cadangan)
 python run.py v4                    # v4.1: v3 + bola hidup sejak tendangan restart -- SUBMISSION SAAT INI
 python run.py export                # exports/possession.csv + exports/ball.parquet (JANGAN di-commit)
 python run.py roles                 # Fase B: label posisi + pergerakan -> exports/roles.parquet, movement.parquet
+python run.py tactics               # Fase B: transisi/counter-press, space map, shape, stamina -> exports/
 python scripts/restart_ab.py        # A/B aturan restart lama vs baru (bola disembunyikan)
 python run.py ball-train --train-half 2 && python scripts/mask_test.py   # uji v1 vs v2 bebas bocor
 python run.py score                 # skor semua CSV di submissions/ (GT publik 5 menit)
@@ -45,6 +46,7 @@ Data dicari di: `MTAH_DATA_DIR` -> `./data` -> `../Dataset Drive`.
 - `sb/v4.py` — v3 + bukti "hidup" 5 dtk setelah tendangan restart yang terlihat.
 - `sb/roles.py` — label posisi per frame (Hungarian ke bentuk tim saat tidak menguasai bola).
 - `sb/movement.py` — jarak, HSR, sprint, kecepatan puncak, posisi rata-rata, heatmap per posisi.
+- `sb/tactics.py` — Transition Radar, Space Map, Shape Monitor, Stamina Monitor (Fatigue Risk Score).
 - `sb/export.py` — file kontrak `exports/` (data turunan, tidak di-commit).
 - `scripts/mask_test.py` — uji v1/v2/v3/v4 dengan bola disembunyikan ~41% di jendela publik.
 - PyTorch dipasang terpisah (versi CUDA dari pytorch.org), butuh Python <= 3.14.

@@ -10,6 +10,7 @@
     python run.py v4                    # v4: v3 + live from the restart kick (current submission)
     python run.py export                # contract files for the next phases -> exports/
     python run.py roles                 # Fase B: position labels + movement per position -> exports/
+    python run.py tactics               # Fase B: transitions, shape, stamina, space -> exports/
     python run.py score                 # score every CSV in submissions/ (public 5 min only)
     python run.py score -- --bootstrap 1000   # with confidence intervals
     python run.py validate FILE         # the organisers' exact validation checks
@@ -180,6 +181,43 @@ def cmd_roles(args):
     print(totals.sort_values("km", ascending=False).head(12).to_string())
 
 
+def cmd_tactics(args):
+    import os
+    import pandas as pd
+    from sb import tactics
+    pos_path = os.path.join(paths.SUBMISSIONS_DIR, "v4_restart.csv")
+    mv_path = os.path.join(paths.REPO, "exports", "movement.parquet")
+    if not (os.path.isfile(pos_path) and os.path.isfile(mv_path)):
+        sys.exit("Run python run.py v4 and python run.py roles first.")
+    labels = pd.read_csv(pos_path)["label"].to_numpy()
+    ball = np.load(os.path.join(paths.CACHE_DIR, "ball_reconstructed.npz"))["ball"]
+    track = atd.Tracking()
+    t0 = time.time()
+    valid = tactics.assigned_slots(pd.read_parquet(os.path.join(paths.REPO, "exports", "roles.parquet"),
+                                                   columns=["frame", "slot"]), *track.xy.shape[:2])
+    trans, maps = tactics.transitions(track, labels, ball, valid)
+    summary = tactics.transition_summary(trans)
+    shp = tactics.shape(track, labels, valid)
+    alerts = tactics.shape_alerts(shp)
+    stam = tactics.stamina(pd.read_parquet(mv_path))
+    out = tactics.save(trans, maps, summary, shp, alerts, stam)
+    print("tactics in {:.0f}s -> {}".format(time.time() - t0, out))
+    print("transitions: {} turnovers".format(len(trans)))
+    for team, s in summary.items():
+        print("  {} wins {:>3}  dangerous {:>3}  final third {:.0%}  counter-press success {:.0%} "
+              "(pressers {:.1f})".format(team, s["ball_wins"], s["dangerous_transitions"],
+                                         s["reached_final_third_share"], s["counter_press_success_5s"],
+                                         s["pressers_mean_5s"]))
+    print("shape alerts: {}".format(len(alerts["alerts"])))
+    for a in alerts["alerts"][:6]:
+        print("  {} min {:>2}: {}".format(a["team"], a["minute_from"], "; ".join(a["messages"])))
+    red = stam[stam.level == "red"]
+    print("stamina: {} red / {} amber blocks".format(len(red), int((stam.level == "amber").sum())))
+    if len(red):
+        print(red.sort_values("risk", ascending=False).head(6)[
+            ["team", "label", "minute_from", "risk", "hsr_vs_start", "dist_vs_start"]].to_string(index=False))
+
+
 def compare_reference(labels):
     """v0 with window 50 must match the organisers' published baseline on graded frames."""
     import pandas as pd
@@ -219,6 +257,7 @@ def main():
     sub.add_parser("v4").set_defaults(func=cmd_v4)
     sub.add_parser("export").set_defaults(func=cmd_export)
     sub.add_parser("roles").set_defaults(func=cmd_roles)
+    sub.add_parser("tactics").set_defaults(func=cmd_tactics)
     p = sub.add_parser("score")
     p.add_argument("extra", nargs=argparse.REMAINDER, help="passed to run_evaluation.py")
     p.set_defaults(func=cmd_score)

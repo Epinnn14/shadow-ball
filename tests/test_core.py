@@ -204,3 +204,46 @@ def test_sprint_needs_one_second():
     s[10:30] = 8.0          # 0.8 s: not a sprint
     s[50:90] = 8.0          # 1.6 s: a sprint
     assert movement.sprint_count(s) == 1
+
+
+def test_turnovers_only_direct_changes():
+    from sb import tactics
+    lab = np.full(paths.N_FRAMES, "X", dtype="<U1")
+    a, _ = paths.HALVES[0]
+    lab[a:a + 10] = "H"
+    lab[a + 10:a + 15] = "X"          # abstention inside H: still H
+    lab[a + 15:a + 30] = "A"          # direct H -> A: a turnover
+    lab[a + 30:a + 40] = "D"
+    lab[a + 40:a + 50] = "H"          # A -> D -> H: a set piece, not a turnover
+    t = tactics.turnovers(tactics.filled_labels(lab))
+    assert t.tolist() == [a + 15]
+
+
+def test_team_shape_line_and_width():
+    from sb import tactics
+    x = np.array([10, 12, 14, 16, 40, 42, 44, 46, 70, 72], dtype=float)
+    y = np.linspace(5, 50, 10)
+    s = tactics.team_shape(np.stack([x, y], 1)[None].astype(np.float32))
+    assert abs(s["line_height_m"][0] - 13.0) < 1e-4
+    assert abs(s["width_m"][0] - 45.0) < 1e-4 and abs(s["depth_m"][0] - 62.0) < 1e-4
+
+
+def test_ownership_nearest_player():
+    from sb import tactics
+    grid = np.array([[10.0, 10.0], [90.0, 10.0]])
+    own, d_opp = tactics.ownership(np.array([[12.0, 10.0]]), np.array([[88.0, 10.0]]), grid)
+    assert own.tolist() == [1, 0] and abs(d_opp[0] - 78.0) < 1e-6
+
+
+def test_stamina_flags_a_role_that_stops_running():
+    import pandas as pd
+    from sb import tactics
+    rows = []
+    for m in range(0, 45, 5):
+        late = m >= 30
+        rows.append({"team": "H", "label": "CM", "half": 1, "minute_from": m, "coverage": 1.0,
+                     "distance_m": 400 if late else 600, "hsr_m": 10 if late else 80,
+                     "sprints": 0 if late else 3, "top_speed_kmh": 22.0 if late else 28.0})
+    s = tactics.stamina(pd.DataFrame(rows))
+    assert s[s.minute_from == 0].level.iloc[0] == "green"
+    assert s[s.minute_from == 40].level.iloc[0] == "red"

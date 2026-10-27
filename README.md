@@ -41,8 +41,14 @@ The match data is not in this repository and must not be: it is licensed for the
 `python run.py roles` labels every player with a tactical position (GK, LB, LCB, RCB, RB, LCDM,
 CAM, LW, RW, ST, ...) by matching each team's outfield players, frame by frame, to its average
 out-of-possession shape (Hungarian assignment), and computes distance, high-speed running,
-sprints and top speed per position per 5 minutes. Outputs go to `exports/` (derived data, not
-committed).
+sprints and top speed per position per 5 minutes.
+
+`python run.py tactics` then builds what the bench sees live: open-play turnovers with the
+counter-press that followed (players within 10 m, ball won back within 5 s), progression and an
+"open transition" flag; a nearest-player space map at every turnover with the best free zone; team
+shape once per second (width, depth, defensive-line height, compactness) with alerts against the
+first 15 minutes; and a Fatigue Risk Score per position from the drop in high-speed running and
+distance. Outputs go to `exports/` (derived data, not committed).
 
 ## Third-party code
 

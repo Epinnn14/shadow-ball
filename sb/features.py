@@ -53,8 +53,28 @@ def ball_out(track, margin=0.5):
     return pd.Series(state).ffill().fillna(0).to_numpy()
 
 
-def out_until_restart(track, margin=0.5, placed_speed=1.0, placed_frames=20,
-                      kick_speed=5.0, max_s=40.0, resumed_activity=2.2, min_dead_s=8.0):
+def reappears_fast(track, kick_speed=5.0, min_gap=25, look=6):
+    """True at frames where the ball comes back into view after >= `min_gap` unseen frames and is
+    ALREADY moving faster than `kick_speed` m/s: the restart happened while it was out of view
+    (the placement was never seen, so the place-then-kick rule alone would miss it)."""
+    seen = ~np.isnan(track.ball[:, 0])
+    v = ball_speed(track)
+    run = unseen_run(track)
+    out = np.zeros(len(seen), dtype=bool)
+    back = np.where(seen[1:] & ~seen[:-1])[0] + 1
+    for i in back:
+        if run[i - 1] < min_gap:
+            continue
+        window = v[i + 1:i + 1 + look]
+        window = window[~np.isnan(window)]
+        if len(window) >= 3 and np.median(window) > kick_speed:
+            out[i] = True
+    return out
+
+
+def out_until_restart(track, margin=0.5, placed_speed=1.0, placed_frames=10,
+                      kick_speed=5.0, max_s=40.0, resumed_activity=2.2, min_dead_s=8.0,
+                      unseen_restart=True):
     """1 from the moment the ball is seen over a line until the restart is taken.
 
     A restart has two phases, and both must be seen:
@@ -80,6 +100,8 @@ def out_until_restart(track, margin=0.5, placed_speed=1.0, placed_frames=20,
     act = team_activity(track)
     rising = act - np.concatenate((np.full(75, act[0]), act[:-75])) > 0.3
     resumed = seen & ~outside & (act > resumed_activity) & rising
+    unseen_restart = (reappears_fast(track, kick_speed) & ~outside if unseen_restart
+                      else np.zeros(len(bx), dtype=bool))
     min_dead = int(min_dead_s * paths.FPS)
     cap = int(max_s * paths.FPS)
     flag = np.zeros(len(bx))
@@ -93,7 +115,7 @@ def out_until_restart(track, margin=0.5, placed_speed=1.0, placed_frames=20,
             still_run = still_run + 1 if still[i] else 0
             if still_run >= placed_frames:
                 placed = True
-            if ((placed and fast[i]) or dead_for > cap
+            if ((placed and fast[i]) or unseen_restart[i] or dead_for > cap
                     or (dead_for > min_dead and resumed[i])):
                 dead_for, placed = -1, False
         flag[i] = 1.0 if dead_for >= 0 else 0.0
@@ -102,7 +124,8 @@ def out_until_restart(track, margin=0.5, placed_speed=1.0, placed_frames=20,
 
 def whistle_until_restart(track, drop=0.8, drop_frames=75, low=1.6, confirm_s=4.0,
                           confirm_activity=1.4, kick_speed=5.0, placed_speed=1.0,
-                          placed_frames=20, resumed_activity=2.0, max_s=40.0):
+                          placed_frames=10, resumed_activity=2.0, max_s=40.0,
+                          unseen_restart=True):
     """1 from a referee's whistle (inferred) until the restart.
 
     A foul leaves the ball on the pitch, so nothing crosses a line. What every stoppage does
@@ -132,6 +155,8 @@ def whistle_until_restart(track, drop=0.8, drop_frames=75, low=1.6, confirm_s=4.
     fast = seen & (v > kick_speed)
     rising = act - before > 0.3
     resumed = (act > resumed_activity) & rising
+    unseen_restart = (reappears_fast(track, kick_speed) if unseen_restart
+                      else np.zeros(n, dtype=bool))
     cap = int(max_s * paths.FPS)
     flag = np.zeros(n)
     dead_for, still_run, placed = -1, 0, False
@@ -143,7 +168,7 @@ def whistle_until_restart(track, drop=0.8, drop_frames=75, low=1.6, confirm_s=4.
             still_run = still_run + 1 if still[i] else 0
             if still_run >= placed_frames:
                 placed = True
-            if (placed and fast[i]) or resumed[i] or dead_for > cap:
+            if (placed and fast[i]) or unseen_restart[i] or resumed[i] or dead_for > cap:
                 dead_for, placed = -1, False
         flag[i] = 1.0 if dead_for >= 0 else 0.0
     return flag

@@ -8,6 +8,8 @@
     python run.py v2                    # v2: v1 + reconstructed ball
     python run.py v3                    # v3: v2 + fouls / whistles
     python run.py v4                    # v4: v3 + live from the restart kick (current submission)
+    python run.py export                # contract files for the next phases -> exports/
+    python run.py roles                 # Fase B: position labels + movement per position -> exports/
     python run.py score                 # score every CSV in submissions/ (public 5 min only)
     python run.py score -- --bootstrap 1000   # with confidence intervals
     python run.py validate FILE         # the organisers' exact validation checks
@@ -142,6 +144,42 @@ def cmd_v4(args):
     cmd_v2(args, module=v4, name="v4_restart")
 
 
+def cmd_export(args):
+    import os
+    from sb import export
+    z = np.load(os.path.join(paths.CACHE_DIR, "ball_reconstructed.npz"))
+    track = atd.Tracking()
+    labels = v4.run(track, z["ball"], z["sigma"])
+    out = export.export(labels, z["ball"], z["sigma"], z["source"])
+    print("wrote possession.csv and ball.parquet to", out, "(derived data: never commit)")
+
+
+def cmd_roles(args):
+    import json
+    import os
+    from sb import movement, roles
+    pos_path = os.path.join(paths.SUBMISSIONS_DIR, "v4_restart.csv")
+    if not os.path.isfile(pos_path):
+        sys.exit("Run python run.py v4 first: roles are named from the out-of-possession shape.")
+    import pandas as pd
+    possession = pd.read_csv(pos_path)["label"].to_numpy()
+    track = atd.Tracking()
+    t0 = time.time()
+    df, formations = roles.run(track, possession)
+    sides = {("H" if team == 0 else "A", half): roles.attacks_right(track, team, half)
+             for team in (0, 1) for half in (1, 2)}
+    mv, heat = movement.run(df, track, sides)
+    roles.save(df, formations)
+    out = movement.save(mv, heat)
+    print("roles + movement in {:.0f}s -> {}".format(time.time() - t0, out))
+    for key, value in formations.items():
+        print("  {:<22} {}".format(key, value["formation"]))
+    totals = mv.groupby(["team", "label"]).agg(
+        km=("distance_m", lambda x: round(x.sum() / 1000, 2)),
+        sprints=("sprints", "sum"), top_kmh=("top_speed_kmh", "max"))
+    print(totals.sort_values("km", ascending=False).head(12).to_string())
+
+
 def compare_reference(labels):
     """v0 with window 50 must match the organisers' published baseline on graded frames."""
     import pandas as pd
@@ -179,6 +217,8 @@ def main():
     sub.add_parser("v2").set_defaults(func=cmd_v2)
     sub.add_parser("v3").set_defaults(func=cmd_v3)
     sub.add_parser("v4").set_defaults(func=cmd_v4)
+    sub.add_parser("export").set_defaults(func=cmd_export)
+    sub.add_parser("roles").set_defaults(func=cmd_roles)
     p = sub.add_parser("score")
     p.add_argument("extra", nargs=argparse.REMAINDER, help="passed to run_evaluation.py")
     p.set_defaults(func=cmd_score)

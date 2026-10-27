@@ -3,6 +3,7 @@ data/
 *.mp4
 cache/
 submissions/
+exports/
 experiments/scoreboard/
 
 # Python / editors

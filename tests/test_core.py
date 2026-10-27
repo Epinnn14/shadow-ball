@@ -154,3 +154,53 @@ def test_restart_kick_only_counts_latches_ended_by_a_kick():
     capped = np.zeros(len(latch))
     capped[20:100] = 1                        # ends while the ball is slow: not a restart
     assert F.restart_kicks(track, [capped]).sum() == 0
+
+
+def test_reappears_fast_marks_unseen_restart_only():
+    from sb import features as F
+
+    class T:
+        pass
+    t = T()
+    n = 200
+    x = np.full(n, np.nan)
+    x[:20] = 30.0                                   # seen, still
+    x[100:] = 30 + np.arange(n - 100) * 0.4         # back in view after 80 unseen frames, 10 m/s
+    t.ball = np.stack([x, np.full(n, 20.0)], axis=1).astype(np.float32)
+    flags = F.reappears_fast(t)
+    assert flags.sum() == 1 and flags[100]
+    x2 = x.copy()
+    x2[100:] = 30 + np.arange(n - 100) * 0.04       # back in view but slow (1 m/s): not a restart
+    t.ball = np.stack([x2, np.full(n, 20.0)], axis=1).astype(np.float32)
+    assert F.reappears_fast(t).sum() == 0
+
+
+def test_lines_and_names_for_a_4_2_3_1():
+    from sb import roles
+    # depth (m, relative to the team centroid) and width (m, 0 = team's left touchline)
+    depth = np.array([-12, -12, -8, -6, -4, -1, 8, 9, 9, 15], dtype=float)
+    width = np.array([29, 42, 54, 18, 39, 31, 44, 55, 21, 33], dtype=float)
+    names, formation = roles.name_roles(np.stack([depth, width], axis=1), width)
+    assert formation == "4-2-3-1"
+    assert names[3] == "LB" and names[2] == "RB"
+    assert {names[0], names[1]} == {"LCB", "RCB"}
+    assert {names[4], names[5]} == {"LCDM", "RCDM"}
+    assert names[9] == "ST" and names[8] == "LW" and names[7] == "RW" and names[6] == "CAM"
+
+
+def test_lines_and_names_for_a_4_4_2():
+    from sb import roles
+    depth = np.array([-11, -11, -9, -8, -1, 1, 4, 6, 12, 13], dtype=float)
+    width = np.array([25, 35, 16, 46, 35, 26, 46, 14, 38, 26], dtype=float)
+    names, formation = roles.name_roles(np.stack([depth, width], axis=1), width)
+    assert formation == "4-4-2"
+    assert names[2] == "LB" and names[3] == "RB" and names[7] == "LM"
+    assert {names[8], names[9]} == {"CF", "ST"}
+
+
+def test_sprint_needs_one_second():
+    from sb import movement
+    s = np.zeros(200)
+    s[10:30] = 8.0          # 0.8 s: not a sprint
+    s[50:90] = 8.0          # 1.6 s: a sprint
+    assert movement.sprint_count(s) == 1

@@ -34,6 +34,15 @@ The match data is not in this repository and must not be: it is licensed for the
 | v2 | v1 + ball reconstruction (self-supervised transformer over the players; 2.9 m median error vs 5.6 m for interpolation, cross-half) | same as v1 when the ball is visible; with the ball hidden on ~41% of the public window: 0.444 vs v1 0.419 (8 random masks, model trained on half 2 only) |
 | v3 | v2 + fouls and other stoppages with the ball still on the pitch: inferred whistle (collective deceleration that stays slow) latched until the restart, 10 s activity, ball placed inside the pitch | 0.5091 (macroF1 0.855 vs 0.760); ball hidden: spellF1 0.445 vs v2 0.444, macroF1 0.797 vs 0.731 |
 | v4 | v3 + the ball is live from a seen restart kick on (a stoppage latch that ends on a kick pushes "alive" for 5 s), fixing dead-ball stretches that ended 1-5 s late | 0.5455 (macroF1 0.872); ball hidden: spellF1 0.464 vs v3 0.445, never worse in 8 masks |
+| v4.1 | v4 with better restarts: the ball reappearing already moving fast after an unseen stretch ends a stoppage; a 0.4 s placement is enough | 0.5455 (macroF1 0.900, transitions F1 0.46); ball hidden: spellF1 0.473 vs v4 0.464, never worse |
+
+## Tactical layer (Fase B)
+
+`python run.py roles` labels every player with a tactical position (GK, LB, LCB, RCB, RB, LCDM,
+CAM, LW, RW, ST, ...) by matching each team's outfield players, frame by frame, to its average
+out-of-possession shape (Hungarian assignment), and computes distance, high-speed running,
+sprints and top speed per position per 5 minutes. Outputs go to `exports/` (derived data, not
+committed).
 
 ## Third-party code
 

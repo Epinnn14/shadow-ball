@@ -118,3 +118,28 @@ def test_context_features_flags_far_context():
     ctx = ballnet.context_features(ball, np.array([1]), np.array([0]), np.array([1001]))
     assert ctx[0, 3] == 1.0            # last seen 1 frame ago: known
     assert ctx[0, 7] == 0.0            # next seen 40 s later: beyond MAX_CONTEXT_S -> unknown
+
+
+class _WhistleTrack:
+    """Players run at 3 m/s, a whistle at frame 300 slows everyone to 0.8 m/s for 20 s,
+    the ball is placed then kicked at frame 700 and everyone speeds up again."""
+    def __init__(self):
+        n = 1200
+        speed = np.full(n, 3.0)
+        speed[300:700] = 0.8
+        speed[300:350] = np.linspace(3.0, 0.8, 50)
+        speed[700:760] = np.linspace(0.8, 3.0, 60)
+        self.speed = np.repeat(speed[:, None], 4, axis=1).astype(np.float32)
+        x = np.full(n, 40.0)
+        x[:300] = 40 + np.arange(300) * 0.2          # ball moving with play
+        x[300:700] = 100.0                             # placed (still) inside the pitch
+        x[700:] = 100 - np.arange(n - 700) * 0.4       # kicked, 10 m/s
+        self.ball = np.stack([x, np.full(n, 30.0)], axis=1).astype(np.float32)
+
+
+def test_whistle_latch_covers_foul_until_restart():
+    from sb import features as F
+    flag = F.whistle_until_restart(_WhistleTrack())
+    assert flag[100] == 0              # live play before the whistle
+    assert flag[500] == 1              # stoppage
+    assert flag[800] == 0              # restart taken

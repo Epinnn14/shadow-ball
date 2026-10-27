@@ -24,9 +24,10 @@ sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.join(ROOT, "evaluation"))
 
 import possession_metrics as pm  # noqa: E402
-from sb import atd, ballnet, paths, v1, v2  # noqa: E402
+from sb import atd, ballnet, paths, v1, v2, v3  # noqa: E402
 
 TARGET_MISSING = 0.41
+VERSIONS = ("v1", "v2", "v3")
 
 
 def masked_track(track, rng, gaps):
@@ -66,19 +67,22 @@ def main():
     rng = np.random.default_rng(7)
     for run in range(args.runs):
         t2 = masked_track(track, rng, gaps)
-        lab1 = v1.run(t2)
         ball, sigma, _ = ballnet.reconstruct(model, t2)
-        lab2 = v2.run(t2, ball, sigma)
-        s1, m1 = score(lab1, gt_codes)
-        s2, m2 = score(lab2, gt_codes)
-        rows.append((s1, s2, m1, m2))
-        print("run {}: spellF1 v1 {:.3f}  v2 {:.3f}   macroF1 v1 {:.3f}  v2 {:.3f}".format(
-            run, s1, s2, m1, m2))
+        labels = {"v1": v1.run(t2), "v2": v2.run(t2, ball, sigma), "v3": v3.run(t2, ball, sigma)}
+        scores = {k: score(lab, gt_codes) for k, lab in labels.items()}
+        rows.append([scores[k][0] for k in VERSIONS] + [scores[k][1] for k in VERSIONS])
+        print("run {}: spellF1 ".format(run) + "  ".join(
+            "{} {:.3f}".format(k, scores[k][0]) for k in VERSIONS) + "   macroF1 " + "  ".join(
+            "{} {:.3f}".format(k, scores[k][1]) for k in VERSIONS))
     r = np.array(rows)
-    print("\nmean spellF1  v1 {:.3f}  v2 {:.3f}  (v2 better in {}/{} runs)".format(
-        r[:, 0].mean(), r[:, 1].mean(), int((r[:, 1] > r[:, 0]).sum()), len(r)))
-    print("mean macroF1  v1 {:.3f}  v2 {:.3f}  (v2 better in {}/{} runs)".format(
-        r[:, 2].mean(), r[:, 3].mean(), int((r[:, 3] > r[:, 2]).sum()), len(r)))
+    n = len(VERSIONS)
+    for j, metric in ((0, "spellF1"), (n, "macroF1")):
+        means = "  ".join("{} {:.3f}".format(k, r[:, j + i].mean()) for i, k in enumerate(VERSIONS))
+        print("mean {}  {}".format(metric, means))
+        for i in range(1, n):
+            better = int((r[:, j + i] > r[:, j + i - 1]).sum())
+            print("   {} better than {} in {}/{} runs".format(
+                VERSIONS[i], VERSIONS[i - 1], better, len(r)))
     full = (score(v1.run(track), gt_codes))
     print("reference, ball NOT hidden: v1 spellF1 {:.3f} macroF1 {:.3f}".format(*full))
 

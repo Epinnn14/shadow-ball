@@ -6,6 +6,7 @@
     python run.py v1                    # v1: dead-ball detection + sticky possession (HMM)
     python run.py ball-train --cv       # v2: train the ball model (GPU if available), validate
     python run.py v2                    # v2: v1 + reconstructed ball
+    python run.py v3                    # v3: v2 + fouls / whistles (current submission)
     python run.py score                 # score every CSV in submissions/ (public 5 min only)
     python run.py score -- --bootstrap 1000   # with confidence intervals
     python run.py validate FILE         # the organisers' exact validation checks
@@ -20,7 +21,7 @@ import time
 
 import numpy as np
 
-from sb import atd, baseline, paths, submission, v1, v2
+from sb import atd, baseline, paths, submission, v1, v2, v3
 
 
 def cmd_cache(args):
@@ -115,21 +116,25 @@ def cmd_ball_train(args):
         ballnet.model_path(), out, log))
 
 
-def cmd_v2(args):
+def cmd_v2(args, module=v2, name="v2_ballnet"):
     import os
     path = os.path.join(paths.CACHE_DIR, "ball_reconstructed.npz")
     if not os.path.isfile(path):
         sys.exit("No reconstructed ball yet. Run: python run.py ball-train --cv")
     z = np.load(path)
     track = atd.Tracking()
-    labels = v2.run(track, z["ball"], z["sigma"])
-    out = submission.write(labels, "v2_ballnet")
+    labels = module.run(track, z["ball"], z["sigma"])
+    out = submission.write(labels, name)
     stats = submission.summary(labels)
     graded = sum(stats[k] for k in "HAD")
     print("wrote", out)
     print("{}  D share {:.1f}%  mean possession {:.1f}s".format(
         stats, 100 * stats["D"] / graded, (stats["H"] + stats["A"]) / paths.FPS / stats["possessions"]))
     submission.validate(out)
+
+
+def cmd_v3(args):
+    cmd_v2(args, module=v3, name="v3_whistle")
 
 
 def compare_reference(labels):
@@ -167,6 +172,7 @@ def main():
                    help="train on one half only -> cache/ballnet_half<N>.pt (for leak-free tests)")
     p.set_defaults(func=cmd_ball_train)
     sub.add_parser("v2").set_defaults(func=cmd_v2)
+    sub.add_parser("v3").set_defaults(func=cmd_v3)
     p = sub.add_parser("score")
     p.add_argument("extra", nargs=argparse.REMAINDER, help="passed to run_evaluation.py")
     p.set_defaults(func=cmd_score)

@@ -100,6 +100,67 @@ def out_until_restart(track, margin=0.5, placed_speed=1.0, placed_frames=20,
     return flag
 
 
+def whistle_until_restart(track, drop=0.8, drop_frames=75, low=1.6, confirm_s=4.0,
+                          confirm_activity=1.4, kick_speed=5.0, placed_speed=1.0,
+                          placed_frames=20, resumed_activity=2.0, max_s=40.0):
+    """1 from a referee's whistle (inferred) until the restart.
+
+    A foul leaves the ball on the pitch, so nothing crosses a line. What every stoppage does
+    show is the players: after the whistle everyone decelerates together. Trigger: team mean
+    speed falls by more than `drop` m/s within `drop_frames` and ends below `low` m/s.
+    Confirmation: it STAYS below `confirm_activity` for `confirm_s` seconds (a slow build-up
+    after a sprint does not; a stoppage does). Then dead until the ball is placed and kicked,
+    or until the team clearly speeds up again, or `max_s` seconds.
+    """
+    act = team_activity(track)
+    n = len(act)
+    before = np.concatenate((np.full(drop_frames, act[0]), act[:-drop_frames]))
+    trigger = (before - act > drop) & (act < low)
+    confirm = int(confirm_s * paths.FPS)
+    slow = act < confirm_activity
+    # stays slow for the next confirm frames: forward-looking run length of `slow`
+    run = np.zeros(n, dtype=np.int32)
+    count = 0
+    for i in range(n - 1, -1, -1):
+        count = count + 1 if slow[i] else 0
+        run[i] = count
+    confirmed = trigger & (run >= confirm)
+
+    seen = ~np.isnan(track.ball[:, 0])
+    v = rolling_median(ball_speed(track), 7)
+    still = seen & (v < placed_speed)
+    fast = seen & (v > kick_speed)
+    rising = act - before > 0.3
+    resumed = (act > resumed_activity) & rising
+    cap = int(max_s * paths.FPS)
+    flag = np.zeros(n)
+    dead_for, still_run, placed = -1, 0, False
+    for i in range(n):
+        if dead_for < 0 and confirmed[i]:
+            dead_for, still_run, placed = 0, 0, False
+        if dead_for >= 0:
+            dead_for += 1
+            still_run = still_run + 1 if still[i] else 0
+            if still_run >= placed_frames:
+                placed = True
+            if (placed and fast[i]) or resumed[i] or dead_for > cap:
+                dead_for, placed = -1, False
+        flag[i] = 1.0 if dead_for >= 0 else 0.0
+    return flag
+
+
+def ball_placed_inside(track, window=50, threshold=0.6, activity=1.5):
+    """1 where the ball is seen INSIDE the pitch, nearly still for ~2 s, while the team is slow:
+    a free kick being set up. (A goalkeeper holding the ball is still too, but the outfield
+    players are then usually moving into shape, so team activity is higher.)"""
+    length, width = paths.PITCH
+    bx, by = track.ball[:, 0], track.ball[:, 1]
+    inside = (bx >= 0) & (bx <= length) & (by >= 0) & (by <= width)
+    v = rolling_median(ball_speed(track), window)
+    seen = rolling_mean((~np.isnan(bx)).astype(float), window) > 0.8
+    return ((v < threshold) & seen & inside & (team_activity(track) < activity)).astype(float)
+
+
 def ball_static(track, window=25, threshold=0.8):
     """1 where the ball is seen and has barely moved over ~1 s (placed for a restart)."""
     v = rolling_median(ball_speed(track), window)

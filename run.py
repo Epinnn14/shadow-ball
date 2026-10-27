@@ -6,7 +6,8 @@
     python run.py v1                    # v1: dead-ball detection + sticky possession (HMM)
     python run.py ball-train --cv       # v2: train the ball model (GPU if available), validate
     python run.py v2                    # v2: v1 + reconstructed ball
-    python run.py v3                    # v3: v2 + fouls / whistles (current submission)
+    python run.py v3                    # v3: v2 + fouls / whistles
+    python run.py v4                    # v4: v3 + live from the restart kick (current submission)
     python run.py score                 # score every CSV in submissions/ (public 5 min only)
     python run.py score -- --bootstrap 1000   # with confidence intervals
     python run.py validate FILE         # the organisers' exact validation checks
@@ -21,7 +22,7 @@ import time
 
 import numpy as np
 
-from sb import atd, baseline, paths, submission, v1, v2, v3
+from sb import atd, baseline, paths, submission, v1, v2, v3, v4
 
 
 def cmd_cache(args):
@@ -137,6 +138,10 @@ def cmd_v3(args):
     cmd_v2(args, module=v3, name="v3_whistle")
 
 
+def cmd_v4(args):
+    cmd_v2(args, module=v4, name="v4_restart")
+
+
 def compare_reference(labels):
     """v0 with window 50 must match the organisers' published baseline on graded frames."""
     import pandas as pd
@@ -173,6 +178,7 @@ def main():
     p.set_defaults(func=cmd_ball_train)
     sub.add_parser("v2").set_defaults(func=cmd_v2)
     sub.add_parser("v3").set_defaults(func=cmd_v3)
+    sub.add_parser("v4").set_defaults(func=cmd_v4)
     p = sub.add_parser("score")
     p.add_argument("extra", nargs=argparse.REMAINDER, help="passed to run_evaluation.py")
     p.set_defaults(func=cmd_score)

@@ -149,6 +149,33 @@ def whistle_until_restart(track, drop=0.8, drop_frames=75, low=1.6, confirm_s=4.
     return flag
 
 
+def restart_kicks(track, latches, kick_speed=5.0):
+    """Frames where a stoppage latch ended BECAUSE the ball was kicked: a restart was seen.
+
+    `latches` are 0/1 arrays such as out_until_restart / whistle_until_restart. A latch that
+    ends with the ball moving faster than `kick_speed` m/s ended on a restart; one that ended on
+    its time cap or on resumed activity did not, and is not counted.
+    """
+    seen = ~np.isnan(track.ball[:, 0])
+    v = rolling_median(ball_speed(track), 7)
+    kicks = np.zeros(len(seen), dtype=bool)
+    for flag in latches:
+        ends = np.where((flag[:-1] == 1) & (flag[1:] == 0))[0] + 1
+        ends = ends[seen[ends] & (v[ends] > kick_speed)]
+        kicks[ends] = True
+    return kicks
+
+
+def after_restart(kicks, seconds=5.0):
+    """1 for `seconds` after a detected restart kick: the ball is live from the kick on, even if
+    the players are still slow (they always are, right after a throw-in or goal kick)."""
+    n = int(seconds * paths.FPS)
+    out = np.zeros(len(kicks))
+    for k in np.where(kicks)[0]:
+        out[k:k + n] = 1.0
+    return out
+
+
 def ball_placed_inside(track, window=50, threshold=0.6, activity=1.5):
     """1 where the ball is seen INSIDE the pitch, nearly still for ~2 s, while the team is slow:
     a free kick being set up. (A goalkeeper holding the ball is still too, but the outfield

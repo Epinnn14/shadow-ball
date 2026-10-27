@@ -24,10 +24,10 @@ sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.join(ROOT, "evaluation"))
 
 import possession_metrics as pm  # noqa: E402
-from sb import atd, ballnet, paths, v1, v2, v3  # noqa: E402
+from sb import atd, ballnet, paths, v1, v2, v3, v4  # noqa: E402
 
 TARGET_MISSING = 0.41
-VERSIONS = ("v1", "v2", "v3")
+VERSIONS = ("v1", "v2", "v3", "v4")
 
 
 def masked_track(track, rng, gaps):
@@ -68,7 +68,8 @@ def main():
     for run in range(args.runs):
         t2 = masked_track(track, rng, gaps)
         ball, sigma, _ = ballnet.reconstruct(model, t2)
-        labels = {"v1": v1.run(t2), "v2": v2.run(t2, ball, sigma), "v3": v3.run(t2, ball, sigma)}
+        labels = {"v1": v1.run(t2), "v2": v2.run(t2, ball, sigma), "v3": v3.run(t2, ball, sigma),
+                  "v4": v4.run(t2, ball, sigma)}
         scores = {k: score(lab, gt_codes) for k, lab in labels.items()}
         rows.append([scores[k][0] for k in VERSIONS] + [scores[k][1] for k in VERSIONS])
         print("run {}: spellF1 ".format(run) + "  ".join(

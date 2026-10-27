@@ -143,3 +143,14 @@ def test_whistle_latch_covers_foul_until_restart():
     assert flag[100] == 0              # live play before the whistle
     assert flag[500] == 1              # stoppage
     assert flag[800] == 0              # restart taken
+
+
+def test_restart_kick_only_counts_latches_ended_by_a_kick():
+    from sb import features as F
+    track = _BallTrack()                      # out, carried back, placed, kicked at frame 300
+    latch = F.out_until_restart(track)
+    kicks = F.restart_kicks(track, [latch])
+    assert kicks.sum() == 1 and 295 <= np.argmax(kicks) <= 310
+    capped = np.zeros(len(latch))
+    capped[20:100] = 1                        # ends while the ball is slow: not a restart
+    assert F.restart_kicks(track, [capped]).sum() == 0

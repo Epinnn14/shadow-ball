@@ -50,6 +50,19 @@ shape once per second (width, depth, defensive-line height, compactness) with al
 first 15 minutes; and a Fatigue Risk Score per position from the drop in high-speed running and
 distance. Outputs go to `exports/` (derived data, not committed).
 
+## Demo (laptop + phone)
+
+```bash
+python run.py demo                      # replay clip, default 55'-70' -> exports/demo/clip.json
+python run.py serve                     # prints the laptop and phone addresses
+```
+
+The laptop shows the full bench screen (pitch with position labels, Bench Copilot feed, fatigue,
+possession timeline, KPIs, movement per position). A phone on the same Wi-Fi or on the laptop's
+hotspot opens the printed address and gets the pitch (upright) plus movement per position, and
+follows the laptop's clock. The clip is derived match data: it is served only from the laptop on
+the local network and never uploaded. No internet or CDN is needed.
+
 ## Third-party code
 
 `games.py` and `evaluation/` are copied unchanged from the organisers' repository

@@ -11,6 +11,8 @@
     python run.py export                # contract files for the next phases -> exports/
     python run.py roles                 # Fase B: position labels + movement per position -> exports/
     python run.py tactics               # Fase B: transitions, shape, stamina, space -> exports/
+    python run.py demo                  # replay clip for the web demo -> exports/demo/clip.json
+    python run.py serve                 # web demo on the laptop, phones on the same Wi-Fi
     python run.py score                 # score every CSV in submissions/ (public 5 min only)
     python run.py score -- --bootstrap 1000   # with confidence intervals
     python run.py validate FILE         # the organisers' exact validation checks
@@ -218,6 +220,96 @@ def cmd_tactics(args):
             ["team", "label", "minute_from", "risk", "hsr_vs_start", "dist_vs_start"]].to_string(index=False))
 
 
+def cmd_demo(args):
+    import os
+    import pandas as pd
+    from sb import demo
+    exp = os.path.join(paths.REPO, "exports")
+    pos_path = os.path.join(paths.SUBMISSIONS_DIR, "v4_restart.csv")
+    if not all(os.path.isfile(os.path.join(exp, f)) for f in ("roles.parquet", "shape.parquet")):
+        sys.exit("Run python run.py v4, roles and tactics first.")
+    labels = pd.read_csv(pos_path)["label"].to_numpy()
+    z = np.load(os.path.join(paths.CACHE_DIR, "ball_reconstructed.npz"))
+    track = atd.Tracking()
+    role_df = pd.read_parquet(os.path.join(exp, "roles.parquet"))
+    t0 = time.time()
+    clip = demo.build(track, labels, z["ball"], z["sigma"], z["source"], role_df, exp,
+                      minute_from=args.minute_from, minute_to=args.minute_to)
+    path = demo.save(clip)
+    print("demo clip {}'-{}' ({} frames, {} events) -> {} ({:.1f} MB) in {:.0f}s".format(
+        args.minute_from, args.minute_to, len(clip["frames"]), len(clip["events"]), path,
+        os.path.getsize(path) / 1e6, time.time() - t0))
+    print("next: python run.py serve")
+
+
+def cmd_serve(args):
+    import functools
+    import http.server
+    import os
+    import socket
+    root = os.path.join(paths.REPO, "demo")
+    clip = os.path.join(paths.REPO, "exports", "demo", "clip.json")
+    if not os.path.isfile(clip):
+        sys.exit("No demo clip yet. Run: python run.py demo")
+
+    import json
+    state = {"frame": None, "playing": False, "speed": 1, "t": time.time()}
+
+    class Handler(http.server.SimpleHTTPRequestHandler):
+        # /api/state: the laptop (lead) posts where the replay is; phones (follow) read it
+        def do_GET(self):
+            if self.path.split("?")[0] == "/api/state":
+                body = json.dumps(dict(state, now=time.time())).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            super().do_GET()
+
+        def do_POST(self):
+            if self.path.split("?")[0] != "/api/state":
+                self.send_error(404)
+                return
+            try:
+                data = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))))
+                state.update(frame=int(data["frame"]), playing=bool(data["playing"]),
+                             speed=float(data["speed"]), t=time.time())
+            except (ValueError, KeyError, TypeError):
+                self.send_error(400)
+                return
+            self.send_response(204)
+            self.end_headers()
+
+        def translate_path(self, path):
+            if path.split("?")[0] == "/data/clip.json":
+                return clip
+            return super().translate_path(path)
+
+        def log_message(self, *a):
+            pass
+
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("10.255.255.255", 1))        # no packet is sent: only picks the LAN interface
+        ip = s.getsockname()[0]
+        s.close()
+    except OSError:
+        ip = "127.0.0.1"
+    server = http.server.ThreadingHTTPServer(("0.0.0.0", args.port),
+                                             functools.partial(Handler, directory=root))
+    print("Shadow Ball demo")
+    print("  laptop : http://localhost:{}".format(args.port))
+    print("  HP     : http://{}:{}  (Wi-Fi/hotspot yang sama; izinkan Python di firewall 'Private')".format(ip, args.port))
+    print("Ctrl+C untuk berhenti. Data hanya dilayani dari laptop ini, tidak diunggah ke mana pun.")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+
+
 def compare_reference(labels):
     """v0 with window 50 must match the organisers' published baseline on graded frames."""
     import pandas as pd
@@ -258,6 +350,13 @@ def main():
     sub.add_parser("export").set_defaults(func=cmd_export)
     sub.add_parser("roles").set_defaults(func=cmd_roles)
     sub.add_parser("tactics").set_defaults(func=cmd_tactics)
+    p = sub.add_parser("demo")
+    p.add_argument("--from", dest="minute_from", type=float, default=55)
+    p.add_argument("--to", dest="minute_to", type=float, default=70)
+    p.set_defaults(func=cmd_demo)
+    p = sub.add_parser("serve")
+    p.add_argument("--port", type=int, default=8000)
+    p.set_defaults(func=cmd_serve)
     p = sub.add_parser("score")
     p.add_argument("extra", nargs=argparse.REMAINDER, help="passed to run_evaluation.py")
     p.set_defaults(func=cmd_score)

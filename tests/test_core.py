@@ -247,3 +247,15 @@ def test_stamina_flags_a_role_that_stops_running():
     s = tactics.stamina(pd.DataFrame(rows))
     assert s[s.minute_from == 0].level.iloc[0] == "green"
     assert s[s.minute_from == 40].level.iloc[0] == "red"
+
+
+def test_demo_block_end_and_running_totals():
+    from sb import demo
+    a2 = paths.HALVES[1][0]
+    assert demo.block_end(2, 60) == a2 + 20 * 60 * paths.FPS          # 60'-65' known at 65'
+    assert demo.block_end(1, 50) == paths.HALVES[0][1]               # stoppage block: end of half
+    speed = np.zeros(100)
+    speed[10:60] = 8.0                                                # one 2-s sprint at 8 m/s
+    dist, hsr, sprints, top = demo.cumulative_role_stats(speed)
+    assert abs(dist[-1] - 16.0) < 1e-6 and abs(hsr[-1] - 16.0) < 1e-6
+    assert sprints[-1] == 1 and abs(top[-1] - 28.8) < 1e-3

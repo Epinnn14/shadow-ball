@@ -51,10 +51,17 @@ Data dicari di: `MTAH_DATA_DIR` -> `./data` -> `../Dataset Drive`.
 - `sb/tactics.py` — Transition Radar, Space Map, Shape Monitor, Stamina Monitor (Fatigue Risk Score).
 - `sb/demo.py` — data klip demo; `demo/` — aplikasi web (HTML/CSS/JS tanpa library, jalan offline).
   Laptop = layar lengkap & pengendali waktu; layar <900 px (HP) = lapangan vertikal + pergerakan,
-  ikut waktu laptop lewat /api/state. `?mode=lead|follow` untuk memaksa peran.
+  ikut waktu laptop lewat /api/state. `?mode=lead|follow` untuk memaksa peran, `?setup=0` lewati setup.
+  `demo/data.js` = 18 formasi + skuad awal (bisa diedit pelatih). Line-up + foto disimpan lewat
+  /api/lineup ke `exports/demo/lineup.json` (lokal). Semua tampilan: tim kita menyerang ke kanan/atas.
+  Fitur khas: Shadow Team, Shadow Ball (awan sigma), zona kontrol, peta saran serang/bertahan 30 dtk.
+  "Perlu diketahui" (3 prioritas otomatis, laptop + HP), momentum per menit dan jalur serangan
+  (masuk sepertiga akhir per sisi) dari `momentum`/`entries` di clip.json.
 - `sb/export.py` — file kontrak `exports/` (data turunan, tidak di-commit).
 - `scripts/mask_test.py` — uji v1/v2/v3/v4 dengan bola disembunyikan ~41% di jendela publik.
 - PyTorch dipasang terpisah (versi CUDA dari pytorch.org), butuh Python <= 3.14.
+  Training final performa maksimal di MacBook M5 (MPS, otomatis); RTX untuk eksperimen cepat.
+  `SB_DEVICE=cpu|cuda|mps` untuk memaksa device.
 - `games.py`, `evaluation/` — salinan kode panitia (MIT), JANGAN diubah.
 - `experiments/` — catatan eksperimen (konfigurasi + skor), satu file per eksperimen.
 - `submissions/`, `cache/`, `data/` — tidak di-commit.

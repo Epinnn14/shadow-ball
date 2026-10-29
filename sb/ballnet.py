@@ -187,13 +187,41 @@ def build_model(d=64, heads=4, layers=2):
 
 
 def _device():
+    """NVIDIA GPU (cuda), Apple Silicon GPU (mps, e.g. the team's MacBook M5) or CPU.
+    SB_DEVICE=cpu|cuda|mps forces one."""
+    import os
     import torch
-    return "cuda" if torch.cuda.is_available() else "cpu"
+    forced = os.environ.get("SB_DEVICE")
+    if forced:
+        return forced
+    if torch.cuda.is_available():
+        return "cuda"
+    if getattr(torch.backends, "mps", None) is not None and torch.backends.mps.is_available():
+        return "mps"
+    return "cpu"
+
+
+def _device_name(device):
+    import platform
+    import torch
+    if device == "cuda":
+        return torch.cuda.get_device_name(0)
+    if device == "mps":
+        return "Apple GPU ({})".format(platform.processor() or platform.machine())
+    return "CPU"
 
 
 def _to(device, *arrays):
+    """Floats go as float32: Apple's mps backend has no float64."""
+    import numpy as np
     import torch
-    return [torch.as_tensor(a, device=device) for a in arrays]
+    out = []
+    for a in arrays:
+        a = np.asarray(a)
+        if a.dtype == np.float64:
+            a = a.astype(np.float32)
+        out.append(torch.as_tensor(a, device=device))
+    return out
 
 
 def nll_metres(mean, logvar, target):
@@ -220,7 +248,7 @@ def train(track, train_frames, steps=4000, batch=512, lr=2e-3, seed=0, log_every
     model = build_model().to(device)
     opt = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-2)
     sched = torch.optim.lr_scheduler.OneCycleLR(opt, max_lr=lr, total_steps=steps)
-    name = torch.cuda.get_device_name(0) if device == "cuda" else "CPU"
+    name = _device_name(device)
     print("  training on {} ({}): {} steps, batch {}".format(device, name, steps, batch))
     log_every = min(log_every, max(steps // 4, 1)) if log_every else 0
     t0 = time.time()

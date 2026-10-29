@@ -3,102 +3,141 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0E1512">
+<meta name="theme-color" content="#0A0B0D">
 <title>Shadow Ball</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header class="top">
+<header class="bar">
   <div class="brand">
-    <div class="logo" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 20 20"><circle cx="10" cy="10" r="6" fill="none" stroke="#0E1512" stroke-width="2"/><circle cx="10" cy="10" r="2.5" fill="#0E1512"/></svg></div>
-    <div class="brand-text">
-      <span class="name">Shadow Ball</span>
-      <span class="sub" id="matchName">Memuat data…</span>
-    </div>
+    <span class="mark" aria-hidden="true"></span>
+    <span class="word">Shadow<b>Ball</b></span>
   </div>
-  <div class="status">
-    <span class="live"><span class="dot"></span>LIVE <span class="desk-only">· replay</span></span>
+  <div class="match" id="match"></div>
+  <div class="clockbox">
+    <span class="onair"><i></i>LIVE</span>
     <span class="clock" id="clock">--:--</span>
-    <span class="poss" id="poss">–</span>
-    <button type="button" class="chip" id="followBtn" hidden>Ikuti laptop: aktif</button>
+    <span class="poss" id="poss"></span>
+  </div>
+  <div class="transport">
+    <button type="button" class="icon play" id="playBtn" aria-label="Putar"></button>
+    <input type="range" id="scrub" min="0" max="1" step="0.2" value="0" aria-label="Waktu replay">
+    <div class="seg" id="speeds" role="group" aria-label="Kecepatan">
+      <button type="button" data-speed="1" class="on">1×</button><button type="button" data-speed="3">3×</button><button type="button" data-speed="10">10×</button>
+    </div>
+    <button type="button" class="ghost desk" id="setupBtn">Line-up</button>
+    <button type="button" class="ghost" id="followBtn" hidden></button>
   </div>
 </header>
 
-<div class="controls">
-  <button type="button" class="play" id="playBtn" aria-label="Putar">&#9654;</button>
-  <input type="range" id="scrub" min="0" max="1" step="0.2" value="0" aria-label="Waktu replay">
-  <div class="speeds" role="group" aria-label="Kecepatan">
-    <button type="button" data-speed="1" class="on">1×</button>
-    <button type="button" data-speed="3">3×</button>
-    <button type="button" data-speed="10">10×</button>
+<!-- Kick-off setup: the coach enters the XI and the formation -->
+<section class="setup" id="setup" hidden>
+  <div class="setup-head">
+    <div>
+      <h1>Persiapan kick-off</h1>
+      <p class="muted">Pilih formasi, isi nama dan nomor, lalu pasang pemain ke posisi. Shadow Ball mencocokkan posisi ini dengan pemain yang terdeteksi kamera.</p>
+    </div>
+    <button type="button" class="primary" id="startBtn">Mulai live</button>
   </div>
-</div>
-
-<main class="layout">
-  <section class="card pitch-card">
-    <div class="card-head">
-      <div>
-        <h1>Tactical view</h1>
-        <span class="muted" id="formations"></span>
+  <div class="setup-grid">
+    <div class="panel">
+      <h2>Formasi</h2>
+      <div class="formations" id="formationList"></div>
+      <h2 class="mt">Lawan</h2>
+      <label class="field"><span>Nama</span><input id="oppName" maxlength="40"></label>
+      <div class="kits">
+        <label class="field"><span>Warna kita</span><input type="color" id="kitH" value="#3D7BFF"></label>
+        <label class="field"><span>Warna lawan</span><input type="color" id="kitA" value="#F2613F"></label>
       </div>
-      <div class="toggles desk-only">
-        <button type="button" class="toggle on" data-toggle="labels"><span class="sw"></span>Label posisi</button>
-        <button type="button" class="toggle on" data-toggle="shadow"><span class="sw"></span>Bola bayangan</button>
-        <button type="button" class="toggle on" data-toggle="space"><span class="sw"></span>Ruang kosong</button>
-      </div>
+      <p class="muted small" id="detected"></p>
     </div>
-    <div class="pitch-wrap"><canvas id="pitch" aria-label="Lapangan: posisi pemain dengan label posisi dan bola"></canvas></div>
-    <div class="legend">
-      <span><i style="background:var(--home)"></i><b id="legH">Barcelona</b></span>
-      <span><i style="background:var(--away)"></i><b id="legA">Athletic</b></span>
-      <span><i class="ring-dash"></i>Bola rekonstruksi (model)</span>
-      <span><i class="ring-red"></i>Risiko lelah merah</span>
+    <div class="panel board">
+      <div class="board-head"><h2 id="boardTitle">Susunan pemain</h2><span class="muted small" id="slotHint">Klik posisi, lalu klik pemain</span></div>
+      <div class="board-pitch" id="board"></div>
     </div>
-  </section>
+    <div class="panel">
+      <div class="board-head"><h2>Skuad</h2><button type="button" class="ghost small" id="addPlayer">+ Pemain</button></div>
+      <div class="squad-edit" id="squadEdit"></div>
+      <p class="muted small">Foto ditambahkan sendiri dari laptop dan hanya disimpan di laptop ini (tidak dibundel: hak cipta foto).</p>
+    </div>
+  </div>
+</section>
 
-  <aside class="side desk-only">
+<main class="livegrid" id="live">
+  <div class="col-main">
+    <section class="stage">
+      <div class="strip phoneonly" id="strip" aria-label="Possession per menit"></div>
+      <div class="mom desk"><span class="muted small">Momentum</span><canvas id="momentum" aria-label="Momentum per menit: bola di sepertiga lawan (atas) dan di sepertiga kita (bawah)"></canvas></div>
+      <div class="pitch-holder">
+        <canvas id="pitch" aria-label="Lapangan live"></canvas>
+        <div class="layers desk" id="layers">
+          <button type="button" class="chip on" data-layer="ghost"><i class="sw"></i>Shadow Team</button>
+          <button type="button" class="chip on" data-layer="cloud"><i class="sw"></i>Shadow Ball</button>
+          <button type="button" class="chip on" data-layer="zones"><i class="sw"></i>Zona kontrol</button>
+          <button type="button" class="chip on" data-layer="names"><i class="sw"></i>Nama</button>
+        </div>
+        <div class="dir" id="dir"></div>
+      </div>
+      <div class="stats desk" id="stats"></div>
+    </section>
+
+    <section class="card phoneonly">
+      <header><h2>Perlu diketahui</h2><span class="muted small">sekarang</span></header>
+      <div class="prio" id="prioPhone"></div>
+    </section>
+
+    <div class="advice desk">
+      <article class="adv" id="advAtk">
+        <header><span class="tag atk">Menyerang</span><span class="muted small">30 dtk terakhir</span></header>
+        <canvas></canvas>
+        <div class="adv-text"><b></b><span></span></div>
+      </article>
+      <article class="adv" id="advDef">
+        <header><span class="tag def">Bertahan</span><span class="muted small">30 dtk terakhir</span></header>
+        <canvas></canvas>
+        <div class="adv-text"><b></b><span></span></div>
+      </article>
+    </div>
+
+    <section class="squad">
+      <div class="squad-head">
+        <h2>Pergerakan</h2>
+        <div class="seg" id="teamTabs"><button type="button" data-team="H" class="on" id="tabH">Kita</button><button type="button" data-team="A" id="tabA">Lawan</button></div>
+      </div>
+      <div class="squad-body">
+        <div class="plist" id="plist"></div>
+        <div class="pdetail" id="pdetail">
+          <canvas id="heat"></canvas>
+          <div class="pd-stats" id="pdStats"></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <aside class="col-side desk">
     <section class="card">
-      <div class="card-head"><h2>Bench Copilot</h2><span class="muted" id="feedCount"></span></div>
-      <div id="feed" class="feed"></div>
+      <header><h2>Perlu diketahui</h2><span class="muted small">sekarang</span></header>
+      <div class="prio" id="prio"></div>
     </section>
     <section class="card">
-      <div class="card-head"><h2>Risiko kelelahan</h2><span class="muted">Barcelona · 0–100</span></div>
-      <div id="fatigue" class="bars"></div>
+      <header><h2>Jalur serangan</h2><span class="muted small">15 menit terakhir</span></header>
+      <canvas id="channels"></canvas>
+      <p class="note" id="watch"></p>
     </section>
-    <section class="card soon">
-      <h2>Plan B &amp; Saran pemain</h2>
-      <p class="muted">Menyusul di Fase C: data pemain + 3 kata kunci, opsi taktik terurut, dan kandidat pengganti.</p>
+    <section class="card">
+      <header><h2>Kesegaran</h2><span class="muted small" id="fatigueNote"></span></header>
+      <canvas id="fatigueMap"></canvas>
+      <div class="scale"><span><i style="background:var(--ok)"></i>segar</span><span><i style="background:var(--warn)"></i>waspada</span><span><i style="background:var(--bad)"></i>lelah</span></div>
+    </section>
+    <section class="card">
+      <header><h2>Copilot</h2><span class="muted small" id="feedCount"></span></header>
+      <div class="feed" id="feed"></div>
     </section>
   </aside>
-
-  <section class="card desk-only timeline-card">
-    <div class="card-head"><h2>Timeline possession</h2><span class="muted" id="possShare"></span></div>
-    <div class="timeline" id="timeline"></div>
-    <div class="ticks"><span>0'</span><span id="tickHalf">45'</span><span id="tickNow"></span><span>90+'</span></div>
-  </section>
-
-  <section class="kpis desk-only" id="kpis"></section>
-
-  <section class="card move-card">
-    <div class="card-head">
-      <div>
-        <h2>Statistik pergerakan per posisi</h2>
-        <span class="muted">Sejak kick-off · HSR &gt;19,8 km/j · sprint &gt;25,2 km/j ≥1 dtk</span>
-      </div>
-      <div class="tabs" role="tablist">
-        <button type="button" role="tab" data-team="H" class="on" id="tabH">Barcelona</button>
-        <button type="button" role="tab" data-team="A" id="tabA">Athletic</button>
-      </div>
-    </div>
-    <div class="table-wrap">
-      <div class="trow thead"><span>Posisi</span><span>Jarak</span><span class="r">km/j</span><span class="r">HSR</span><span class="r">Sprint</span><span class="r">Top</span><span class="r">Lelah</span></div>
-      <div id="moveRows"></div>
-    </div>
-    <p class="muted foot">Posisi = peran taktis otomatis (bukan nama pemain). Ketuk baris untuk menyorot posisi di lapangan.</p>
-  </section>
 </main>
 
-<div id="loading" class="loading">Memuat klip…</div>
+<div class="loading" id="loading">Memuat…</div>
+<script src="data.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

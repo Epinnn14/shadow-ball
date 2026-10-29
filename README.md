@@ -12,6 +12,9 @@ python run.py cache
 python run.py v1                        # fallback: v1
 ```
 
+Training picks the GPU itself: CUDA (NVIDIA), MPS (Apple Silicon, used for the final models on a
+MacBook M5) or CPU; `SB_DEVICE=cpu|cuda|mps` forces one.
+
 v2 additionally needs PyTorch (not in requirements.txt because the right build depends on your
 GPU: take the command from https://pytorch.org/get-started/locally/):
 
@@ -57,8 +60,19 @@ python run.py demo                      # replay clip, default 55'-70' -> export
 python run.py serve                     # prints the laptop and phone addresses
 ```
 
-The laptop shows the full bench screen (pitch with position labels, Bench Copilot feed, fatigue,
-possession timeline, KPIs, movement per position). A phone on the same Wi-Fi or on the laptop's
+Before kick-off the coach picks a formation (18 shapes), types names and numbers and adds his own
+player photos (kept on the laptop only; no photos are bundled). Names are matched to the tracked
+players by position (Hungarian assignment), so the chosen formation may differ from the detected one.
+The laptop then shows the full bench screen: the pitch with names, **Shadow Team** (the team's own
+learned defensive shape following the ball; players more than 10 m from their shadow are flagged),
+**Shadow Ball** (an uncertainty cloud when the ball is reconstructed), control zones, two advice maps
+built from the last 30 s (attack: largest space in the opponent half and who runs into it; defence:
+the danger zone in our half, who shifts, and a lower line when the centre-backs tire), a fatigue map,
+a Copilot feed with a mini-pitch per event, and movement per player with a heatmap. On top:
+"Perlu diketahui", the three things that matter now, ranked from all modules (fatigue, counter-attacks,
+the channel the opponent uses, pressure, broken shape, line height, a dangerous opponent, a chance);
+a momentum chart (minutes with the ball in each final third); and attack channels (final-third
+entries left/centre/right for both teams over 15 minutes). The phone also gets "Perlu diketahui". A phone on the same Wi-Fi or on the laptop's
 hotspot opens the printed address and gets the pitch (upright) plus movement per position, and
 follows the laptop's clock. The clip is derived match data: it is served only from the laptop on
 the local network and never uploaded. No internet or CDN is needed.

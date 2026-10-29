@@ -254,29 +254,48 @@ def cmd_serve(args):
 
     import json
     state = {"frame": None, "playing": False, "speed": 1, "t": time.time()}
+    lineup_path = os.path.join(paths.REPO, "exports", "demo", "lineup.json")   # local only, gitignored
+    MAX_LINEUP = 4 * 1024 * 1024                  # names + small photos chosen by the coach
 
     class Handler(http.server.SimpleHTTPRequestHandler):
-        # /api/state: the laptop (lead) posts where the replay is; phones (follow) read it
+        # /api/state : the laptop (lead) posts where the replay is; phones (follow) read it
+        # /api/lineup: names, numbers, formation and photos the coach entered before kick-off
+        def _json(self, body, code=200):
+            body = body if isinstance(body, bytes) else json.dumps(body).encode()
+            self.send_response(code)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
         def do_GET(self):
-            if self.path.split("?")[0] == "/api/state":
-                body = json.dumps(dict(state, now=time.time())).encode()
-                self.send_response(200)
-                self.send_header("Content-Type", "application/json")
-                self.send_header("Cache-Control", "no-store")
-                self.send_header("Content-Length", str(len(body)))
-                self.end_headers()
-                self.wfile.write(body)
-                return
+            route = self.path.split("?")[0]
+            if route == "/api/state":
+                return self._json(dict(state, now=time.time()))
+            if route == "/api/lineup":
+                if not os.path.isfile(lineup_path):
+                    return self._json({"lineup": None})
+                with open(lineup_path, "rb") as handle:
+                    return self._json(handle.read())
             super().do_GET()
 
         def do_POST(self):
-            if self.path.split("?")[0] != "/api/state":
-                self.send_error(404)
+            route = self.path.split("?")[0]
+            size = int(self.headers.get("Content-Length", 0))
+            if route not in ("/api/state", "/api/lineup") or size > MAX_LINEUP:
+                self.send_error(404 if size <= MAX_LINEUP else 413)
                 return
             try:
-                data = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))))
-                state.update(frame=int(data["frame"]), playing=bool(data["playing"]),
-                             speed=float(data["speed"]), t=time.time())
+                data = json.loads(self.rfile.read(size))
+                if route == "/api/state":
+                    state.update(frame=int(data["frame"]), playing=bool(data["playing"]),
+                                 speed=float(data["speed"]), t=time.time())
+                else:
+                    if not isinstance(data.get("lineup"), dict):
+                        raise ValueError("lineup missing")
+                    with open(lineup_path, "w") as handle:
+                        json.dump({"lineup": data["lineup"]}, handle)
             except (ValueError, KeyError, TypeError):
                 self.send_error(400)
                 return

@@ -202,6 +202,8 @@ def build(track, labels, ball, sigma, source, role_df, tactics_dir, minute_from=
                            "zone": t["zone"], "goal_side": t["goal_side"], "free": t["free"]})
     events.sort(key=lambda e: e["frame"])
 
+    momentum, entries = momentum_and_entries(lab, ball, sides, half, last)
+
     with open(os.path.join(tactics_dir, "formations.json")) as handle:
         formations = json.load(handle)
     return {
@@ -213,10 +215,71 @@ def build(track, labels, ball, sigma, source, role_df, tactics_dir, minute_from=
                  "first": first, "last": last, "minute_from": minute_from, "minute_to": minute_to,
                  "pitch": list(paths.PITCH),
                  "model": "v4.1 possession (HMM + ballnet ball) / roles / tactics",
-                 "shape_ref": alerts["reference"]},
+                 "shape_ref": alerts["reference"],
+                 # each team's own out-of-possession shape (roles.py): depth relative to the
+                 # team centroid, width from its left touchline, in its attacking frame.
+                 # The demo's Shadow Team places this shape around the live team.
+                 "role_means": {side: _role_means(formations["{}_half{}".format(track.team_names[t], half)])
+                                for t, side in ((0, "H"), (1, "A"))},
+                 "attacks_right": {side: bool(sides[(t, half)]) for t, side in ((0, "H"), (1, "A"))}},
         "frames": frames, "seconds": {"frames": secs.tolist(), "movement": cum, "shape": shape},
         "timeline": timeline, "events": events, "stamina": stam_rows, "transitions": tr_rows,
+        "momentum": momentum, "entries": entries,
     }
+
+
+FINAL_THIRD = paths.PITCH[0] * 2 / 3
+
+
+def momentum_and_entries(lab, ball, sides, half, last):
+    """What the bench reads at a glance, for every match minute up to the end of the clip.
+
+    momentum: [half, home possession share, share of live time the ball is in the opponent's
+               final third, share in our own final third] -- territory, not just possession.
+    entries:  [frame, team, y] each time a team carries the ball into the opponent's final third
+              (once per 5 s), y in OUR attacking frame (0 = our left), so the demo can show
+              through which channel each side attacks."""
+    length, width = paths.PITCH
+    momentum, entries = [], []
+    for h in (1, 2):
+        if h > half:
+            break
+        a, b = paths.HALVES[h - 1]
+        end = b if h < half else last
+        right = sides[(0, h)]
+        x = ball[a:end + 1, 0] if right else length - ball[a:end + 1, 0]
+        y = ball[a:end + 1, 1] if right else width - ball[a:end + 1, 1]
+        l = lab[a:end + 1]
+        live = np.isin(l, ["H", "A"])
+        for s in range(0, len(l), 60 * paths.FPS):
+            sl = slice(s, s + 60 * paths.FPS)
+            lv = live[sl]
+            if lv.sum() == 0:
+                momentum.append([h, None, 0.0, 0.0])
+                continue
+            xs = x[sl][lv]
+            momentum.append([h, round(float((l[sl][lv] == "H").mean()), 3),
+                             round(float(np.nanmean(xs > FINAL_THIRD)), 3),
+                             round(float(np.nanmean(xs < length - FINAL_THIRD)), 3)])
+        # final-third entries: ball crosses into the attacking third while that team has it
+        for team, inside in (("H", x >= FINAL_THIRD), ("A", x <= length - FINAL_THIRD)):
+            has = l == team
+            cross = np.where(inside[1:] & ~inside[:-1] & has[1:])[0] + 1
+            last_f = -10 ** 9
+            for c in cross:
+                if c - last_f < 5 * paths.FPS or np.isnan(y[c]):
+                    continue
+                last_f = c
+                entries.append([int(a + c), team, round(float(y[c]), 1)])
+    entries.sort()
+    return momentum, entries
+
+
+def _role_means(entry):
+    roles = entry["roles"]
+    if isinstance(roles, dict):
+        return {k: [float(v[0]), float(v[1])] for k, v in roles.items()}
+    return {r["label"]: [float(r["depth_m"]), float(r["width_m"])] for r in roles}
 
 
 def save(clip):

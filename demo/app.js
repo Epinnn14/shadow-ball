@@ -39,6 +39,10 @@
     half1End = (C.runs.find((r) => r[1] === 'end') || [Infinity])[0] - 1;
     S.follow = params.get('mode') === 'follow' || (params.get('mode') !== 'lead' && narrow());
     lineup = savedLineup || readLocal() || defaultLineup();
+    for (const p of lineup.squad) {                       // line-ups saved before profiles existed
+      const d = D.SQUAD.find((q) => q.id === p.id);
+      if (p.keys === undefined) { p.pos = d ? d.pos : []; p.foot = d ? d.foot : null; p.keys = d ? d.keys : []; }
+    }
     applyLineup();
     $('scrub').max = duration;
     bindUI();
@@ -231,16 +235,19 @@
     $('slotHint').textContent = selSlot ? `Pick a player for ${selSlot} from the squad` : 'Click a position, then a player';
     const inXI = {}; for (const [l, id] of Object.entries(lineup.xi)) inXI[id] = l;
     $('squadEdit').innerHTML = lineup.squad.map((p) => `<div class="se${inXI[p.id] ? ' inxi' : ''}${selSlot ? ' pick' : ''}" data-id="${p.id}">
-        <label class="av" title="Tambah foto" style="${p.photo ? `background-image:url(${p.photo})` : ''}">${p.photo ? '' : initials(p.name)}<input type="file" accept="image/*" hidden></label>
-        <input class="num" value="${p.num}" inputmode="numeric" aria-label="Nomor">
-        <input class="name" value="${esc(p.name)}" aria-label="Nama">
+        <label class="av" title="Add a photo" style="${p.photo ? `background-image:url(${p.photo})` : ''}">${p.photo ? '' : initials(p.name)}<input type="file" accept="image/*" hidden></label>
+        <input class="num" value="${p.num}" inputmode="numeric" aria-label="Number">
+        <input class="name" value="${esc(p.name)}" aria-label="Name">
         <span class="pos">${inXI[p.id] || p.group}</span>
-        <button type="button" class="x" aria-label="Hapus">×</button></div>`).join('');
+        <button type="button" class="ed" aria-label="Edit profile">✎</button><button type="button" class="x" aria-label="Remove">×</button></div>`).join('');
+    renderProfile();
     $('squadEdit').querySelectorAll('.se').forEach((row) => {
       const p = player(row.dataset.id);
       row.querySelector('.num').onchange = (e) => { p.num = parseInt(e.target.value, 10) || p.num; renderSetup(); };
       row.querySelector('.name').onchange = (e) => { p.name = e.target.value.trim() || p.name; renderSetup(); };
       row.querySelector('input[type=file]').onchange = (e) => e.target.files[0] && loadPhoto(e.target.files[0], p);
+      row.querySelector('.ed').onclick = () => { editId = editId === p.id ? null : p.id; renderSetup(); };
+      if (p.id === editId) row.classList.add('editing');
       row.querySelector('.x').onclick = () => {
         lineup.squad = lineup.squad.filter((q) => q.id !== p.id);
         for (const l in lineup.xi) if (lineup.xi[l] === p.id) delete lineup.xi[l];
@@ -253,6 +260,29 @@
       };
     });
   }
+  // ---------------------------------------------------------------- player profile editor
+  let editId = null;
+  const ALL_ROLES = ['GK', 'LB', 'LCB', 'CB', 'RCB', 'RB', 'LWB', 'RWB', 'CDM', 'LCDM', 'RCDM', 'LCM', 'CM', 'RCM', 'LM', 'RM', 'CAM', 'LAM', 'RAM', 'LW', 'RW', 'CF', 'ST'];
+  function renderProfile() {
+    const box = $('profileEditor'), p = editId && player(editId);
+    if (!p) { box.hidden = true; return; }
+    box.hidden = false;
+    const keys = (p.keys || []).concat(['', '', '']).slice(0, 3);
+    box.innerHTML = `<div class="pe-head"><b>${esc(p.name)}</b><span class="muted small">profile used by the Player Recommender</span></div>
+      <div class="pe-roles">${ALL_ROLES.map((r) => `<button type="button" class="rchip${(p.pos || []).includes(r) ? ' on' : ''}" data-r="${r}">${r}</button>`).join('')}</div>
+      <div class="pe-row"><label class="field"><span>Foot</span><select id="peFoot"><option value="">?</option><option value="R"${p.foot === 'R' ? ' selected' : ''}>Right</option><option value="L"${p.foot === 'L' ? ' selected' : ''}>Left</option></select></label>
+      ${keys.map((k, i) => `<label class="field"><span>Keyword ${i + 1}</span><input class="peKey" list="traitList" value="${esc(k)}" maxlength="24"></label>`).join('')}</div>
+      <datalist id="traitList">${window.SB_DECIDE.TRAITS.map((t) => `<option value="${t}">`).join('')}</datalist>`;
+    box.querySelectorAll('.rchip').forEach((b) => b.onclick = () => {
+      const r = b.dataset.r; p.pos = p.pos || [];
+      p.pos = p.pos.includes(r) ? p.pos.filter((x) => x !== r) : [...p.pos, r]; renderProfile();
+    });
+    box.querySelector('#peFoot').onchange = (e) => { p.foot = e.target.value || null; };
+    box.querySelectorAll('.peKey').forEach((inp, i) => inp.onchange = () => {
+      const k = [...box.querySelectorAll('.peKey')].map((x) => x.value.trim().toLowerCase()).filter(Boolean); p.keys = k.slice(0, 3);
+    });
+  }
+
   function changeFormation(f) {
     // keep the same players, moved to the nearest slots of the new shape
     const old = D.slots(lineup.formation).filter((s) => lineup.xi[s.label]), neu = D.slots(f);
@@ -289,7 +319,26 @@
     const s = (f - meta.half_start) / meta.fps + (meta.half === 2 ? 45 * 60 : 0);
     return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
   }
-  let lastPost = 0;
+  let lastPost = 0, lastSnap = 0;
+  function postSnapshot(f) {
+    if (S.follow || performance.now() - lastSnap < 2000) return;
+    lastSnap = performance.now();
+    const sc = score(f);
+    const snap = {
+      clock: clockText(f), frame: f, half: meta.half,
+      teams: { us: meta.teams.H, them: lineup.oppName || meta.teams.A }, score: { us: sc.H, them: sc.A },
+      formation: { us: lineup.formation, them: meta.formation.A },
+      need_to_know: (S.top3 || []).map((it) => ({ title: it.title, detail: it.sub })),
+      plan_b: (S.plan || []).slice(0, 4).map((o) => ({ kind: o.kind, title: o.title, why: o.why, effect: o.effect || null })),
+      substitutes: S.subsShown || null,
+      advice: S.adv ? { attack_lane: S.adv.atkLane, attack_space_m: S.adv.atkFree && Math.round(S.adv.atkFree),
+                        defend_lane: S.adv.defLane, drop_line_m: S.adv.dropTo ? Math.round(S.adv.ourLine - S.adv.dropTo) : 0 } : null,
+      fatigue: Object.values(latestStamina(f)).filter((r) => r.team === 'H' && r.half === meta.half && r.risk != null)
+        .map((r) => ({ role: r.label, player: (roleToPlayer[r.label] || {}).name || null, risk: r.risk, level: r.level })),
+      duels: (S.duels || []).map((d) => ({ defender: (roleToPlayer[d.def] || {}).name || d.def, role: d.def, opponent: d.att, goal_side: Math.round(d.behind * 100) / 100 })),
+    };
+    fetch('api/snapshot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(snap) }).catch(() => {});
+  }
   function sync() {
     if (S.follow) {
       fetch('api/state', { cache: 'no-store' }).then((r) => r.json()).then((st) => {
@@ -388,6 +437,9 @@
       channelsV = new PitchView($('channels'), { x0: 0, x1: L, m: 1.5 }); channelsV.layout($('channels').parentElement.clientWidth - 28);
       spV = new PitchView($('spMap'), { x0: 0, x1: L, m: 1.5 }); spV.layout($('spCard').clientWidth - 28);
       duelV = new PitchView($('duelMap'), { x0: 0, x1: 62, m: 1.5 }); duelV.layout($('duelCard').clientWidth - 28);
+      const baW = Math.floor(($('planCard').clientWidth - 28 - 10) / 2);
+      planBV = new PitchView($('baBefore'), { x0: 0, x1: 42, m: 1 }); planBV.layout(baW);
+      planAV = new PitchView($('baAfterC'), { x0: 0, x1: 42, m: 1 }); planAV.layout(baW);
     }
     heatV = new PitchView($('heat'), { portrait: narrow(), x0: 0, x1: L, m: 1.5 });
     heatV.layout(Math.min(narrow() ? 300 : 300, $('pdetail').clientWidth || 300));
@@ -508,7 +560,7 @@
 
   // ================================================================== advice maps (last 30 s)
   let advCache = -1;
-  function windowSamples(idx) { const out = []; for (let i = Math.max(0, idx - 150); i <= idx; i += 5) out.push(framePlayers(i)); return out; }
+  function windowSamples(idx) { const out = []; for (let i = Math.max(0, idx - 150); i <= idx; i += 5) { const ps = framePlayers(i); ps.poss = C.frames[i][1]; out.push(ps); } return out; }
   const nameOf = (role) => { const p = roleToPlayer[role]; return p ? shortName(p) : role; };
 
   function advice(st) {
@@ -550,7 +602,9 @@
       if (mx > 8 && mx < 50 && (!worst || v > worst.v)) worst = { x: mx, y: my, v };
     }
     const dmax = Math.max(1e-6, ...danger.map((d) => d[2]));
-    const ourLines = samples.map((ps) => { const xs = ps.filter((p) => p.team === 'H' && p.role !== 'GK').map((p) => p.x).sort((a, b) => a - b); return xs.length >= 4 ? xs.slice(0, 4).reduce((a, b) => a + b) / 4 : null; }).filter((v) => v != null);
+    // our defensive line is measured while THEY have the ball (in possession the whole team pushes up)
+    const defending = samples.filter((ps) => ps.poss === 'A');
+    const ourLines = (defending.length >= 5 ? defending : samples).map((ps) => { const xs = ps.filter((p) => p.team === 'H' && p.role !== 'GK').map((p) => p.x).sort((a, b) => a - b); return xs.length >= 4 ? xs.slice(0, 4).reduce((a, b) => a + b) / 4 : null; }).filter((v) => v != null);
     const ourLine = ourLines.length ? ourLines.reduce((a, b) => a + b) / ourLines.length : null;
     let mover = null; if (worst) for (const p of st.players) if (p.team === 'H' && p.role !== 'GK') { const d = Math.hypot(p.x - worst.x, p.y - worst.y); if (!mover || d < mover.d) mover = { p, d }; }
     const fat = latestStamina(f), tiredCB = ['LCB', 'RCB', 'CB'].filter((r) => fat['H:' + r] && fat['H:' + r].level === 'red' && fat['H:' + r].half === meta.half);
@@ -563,11 +617,58 @@
     });
     S.adv = { atkLane: best ? lane(best.y) : null, atkFree: best ? best.v : null, runner: runner ? runner.p.role : null,
               defLane: worst ? lane(worst.y) : null, mover: mover ? mover.p.role : null, dropTo, ourLine, tiredCB };
+    simulate(samples, st);
     const def = $('advDef').querySelector('.adv-text');
     def.querySelector('b').textContent = worst ? `Close the ${lane(worst.y)}` : 'Waiting for data';
     def.querySelector('span').textContent = (mover ? `${nameOf(mover.p.role)} shifts ${Math.max(0, Math.round(mover.d - 3))} m` : '') +
       (dropTo ? ` · drop the line ${Math.round(ourLine - dropTo)} m (${tiredCB.join(' + ')} tiring)` : ourLine ? ` · our line ${Math.round(ourLine)} m` : '');
   }
+  // ---------------------------------------------------------------- Plan B simulations
+  // Share of our defensive third that the opponent reaches first (nearest player), averaged over
+  // the last 30 s, with our players where they were vs moved as the option says.
+  const G = () => window.SB_DECIDE.GROUP;
+  function theirControl(samples, move) {
+    let theirs = 0, all = 0;
+    for (let k = 0; k < samples.length; k += 2) {
+      const ps = samples[k].map((p) => (p.team === 'H' && move ? move(p, samples[k]) : p));
+      for (let x = 1.5; x < L / 3; x += 3) for (let y = 1.5; y < W; y += 3) {
+        let dh = 1e9, da = 1e9;
+        for (const p of ps) { const d = (p.x - x) ** 2 + (p.y - y) ** 2; if (p.team === 'H') dh = Math.min(dh, d); else da = Math.min(da, d); }
+        if (da < 1e8 && dh < 1e8) { all++; if (da < dh) theirs++; }
+      }
+    }
+    return all ? theirs / all : 0;
+  }
+  const dropMove = (by) => (p) => (p.role === 'GK' ? p : Object.assign({}, p, { x: Math.max(1, p.x - by) }));
+  function backFiveMove(sideLane) {
+    // the midfielder nearest the gap drops between that side's full-back and centre-back
+    return (p, ps) => {
+      const defs = ps.filter((q) => q.team === 'H' && G()[q.role] === 'DEF');
+      const mids = ps.filter((q) => q.team === 'H' && G()[q.role] === 'MID');
+      if (!defs.length || !mids.length) return p;
+      const lineX = defs.reduce((s, q) => s + q.x, 0) / defs.length;
+      const gapY = sideLane === 'left' ? W * 0.27 : sideLane === 'right' ? W * 0.73 : W / 2;
+      const drop = mids.reduce((b, q) => (Math.hypot(q.x - lineX, q.y - gapY) < Math.hypot(b.x - lineX, b.y - gapY) ? q : b));
+      return p.k === drop.k ? Object.assign({}, p, { x: lineX, y: gapY }) : p;
+    };
+  }
+  function simulate(all, st) {
+    // judged on the moments the opponent had the ball (when the defensive shape matters)
+    const defending = all.filter((ps) => ps.poss === 'A'), samples = defending.length >= 4 ? defending : all;
+    const sim = {}, base = theirControl(samples, null);
+    if (S.adv.dropTo) {
+      const by = Math.round(S.adv.ourLine - S.adv.dropTo);
+      sim.drop = { by, effect: { metric: 'their control of our third', before: base, after: theirControl(samples, dropMove(by)) }, move: dropMove(by) };
+    }
+    const cnt = channelCounts(videoFrame(S.t), 15).A, tot = cnt.reduce((a, b) => a + b, 0);
+    const laneTop = tot ? LANES[cnt.indexOf(Math.max(...cnt))] : (S.adv.defLane || 'middle');
+    const mv = backFiveMove(laneTop);
+    sim.backFive = { side: laneTop, effect: { metric: 'their control of our third', before: base, after: theirControl(samples, mv) }, move: mv };
+    sim.oppLane = tot ? laneTop : null; sim.oppShare = tot ? Math.max(...cnt) / tot : 0;
+    sim.base = base; sim.samples = samples;
+    S.sim = sim;
+  }
+
   function drawAdvice(v, cells, best, color, st, extra) {
     const g = v.ctx; v.begin();
     for (const [x, y, val] of cells) { const a = Math.min(1, val / 15); if (a < 0.08) continue; v.rect(x, y, x + 5, y + 5); g.fillStyle = hexA(color, 0.5 * a * a); g.fill(); }
@@ -768,7 +869,8 @@
     const items = [], opp = (lineup.oppName || meta.teams.A).split(' ')[0];
     const fat = latestStamina(f);
     const red = Object.values(fat).filter((r) => r.team === 'H' && r.half === meta.half && r.level === 'red').sort((a, b) => b.risk - a.risk);
-    if (red.length) items.push({ score: 90 + red[0].risk / 10, color: COL.bad, title: `Prepare a substitution: ${nameOf(red[0].label)}`,
+    const bestSub = S.subsShown && red.length && S.subsShown.for_role === red[0].label ? S.subsShown.candidates[0] : null;
+    if (red.length) items.push({ score: 90 + red[0].risk / 10, color: COL.bad, title: `Prepare a substitution: ${nameOf(red[0].label)}${bestSub ? ' → ' + bestSub.name : ''}`,
       sub: `Fatigue risk ${red[0].risk} · high-speed running at ${Math.round(red[0].hsr * 100)}% of his start` + (red.length > 1 ? ` · also ${red.slice(1).map((r) => nameOf(r.label)).join(', ')}` : '') });
     const dangerA = C.transitions.filter((t) => t.won_by === 'A' && t.dangerous && t.frame <= f && t.frame > f - 10 * 60 * meta.fps).length;
     if (dangerA >= 2) items.push({ score: 80 + dangerA, color: COL.bad, title: `Beware the ${opp} counter`, sub: `${dangerA} dangerous transitions in 10 min` });
@@ -989,7 +1091,8 @@
         <section class="rblock"><h2>Three things that matter now</h2><ul class="rtop">${top || '<li>Nothing urgent yet.</li>'}</ul></section>
         <section class="rblock"><h2>For the next minutes</h2><ul class="rnext">
           <li><b>Attack:</b> ${esc(atk.querySelector('b').textContent)}. ${esc(atk.querySelector('span').textContent)}</li>
-          <li><b>Defend:</b> ${esc(def.querySelector('b').textContent)}. ${esc(def.querySelector('span').textContent)}</li></ul></section>
+          <li><b>Defend:</b> ${esc(def.querySelector('b').textContent)}. ${esc(def.querySelector('span').textContent)}</li>
+          ${(S.plan || []).slice(0, 2).map((o, i) => `<li><b>Plan B ${i + 1}:</b> ${esc(o.title)}. ${esc(o.why)}</li>`).join('')}</ul></section>
       </div>
       <div class="pagebreak"></div>
       <header class="rh small"><div><h1>Maps</h1><p>${esc(meta.teams.H)} ${score(f).H}–${score(f).A} ${esc(opp)} · up to ${clockText(f)}</p></div><div class="rmark"><span class="mark"></span>Shadow<b>Ball</b></div></header>
@@ -1010,12 +1113,75 @@
     duels(st, mk('repDuel', { x0: 0, x1: 62, m: 1.5 }, wHalf), $('repDuelL'), true);
   }
 
+  // ================================================================== Plan B + Player Recommender
+  let planBV, planAV;
+  function planCard(f) {
+    const DEC = window.SB_DECIDE, fat = latestStamina(f);
+    const tired = Object.values(fat).filter((r) => r.team === 'H' && r.half === meta.half && r.level === 'red' && r.label !== 'GK')
+      .sort((a, b) => b.risk - a.risk).map((r) => ({ role: r.label, risk: r.risk, label: nameOf(r.label) }));
+    const badDuel = (S.duels || []).filter((d) => d.danger >= 0.3).sort((a, b) => b.danger - a.danger)[0];
+    const subs = {}, needsOf = {};
+    for (const t of tired) { needsOf[t.role] = DEC.needsFor(t.role, 'fatigue'); subs[t.role] = DEC.recommend(lineup.squad, lineup.xi, slotOf(t.role), needsOf[t.role]); }
+    if (badDuel) { needsOf[badDuel.def] = DEC.needsFor(badDuel.def, 'duel'); subs[badDuel.def] = DEC.recommend(lineup.squad, lineup.xi, slotOf(badDuel.def), needsOf[badDuel.def]); }
+    const tr = C.transitions.filter((t) => t.frame <= f && t.won_by === 'A');
+    const rate = (h) => { const x = tr.filter((t) => t.half === h); return x.length >= 4 ? x.filter((t) => t.regained).length / x.length : null; };
+    const dangerA = C.transitions.filter((t) => t.won_by === 'A' && t.dangerous && t.frame <= f && t.frame > f - 10 * 60 * meta.fps).length;
+    const sim = S.sim || {};
+    S.plan = DEC.planB({ tired, badDuel: badDuel && { def: badDuel.def, att: badDuel.att, behind: badDuel.behind }, subs,
+      drop: sim.drop, backFive: sim.backFive, oppLane: sim.oppLane, oppShare: sim.oppShare, dangerA,
+      regainNow: meta.half === 2 ? rate(2) : null, regainH1: meta.half === 2 ? rate(1) : null,
+      atkLane: S.adv && S.adv.atkLane, atkFree: S.adv && S.adv.atkFree });
+    // substitutes: for the most urgent role (or, with nothing urgent, the most tired outfield role)
+    let role = (S.plan.find((o) => o.kind === 'sub') || {}).role;
+    if (!role) {
+      const any = Object.values(fat).filter((r) => r.team === 'H' && r.half === meta.half && r.risk != null && r.label !== 'GK').sort((a, b) => b.risk - a.risk)[0];
+      role = any && any.label;
+    }
+    if (role && !subs[role]) { needsOf[role] = DEC.needsFor(role, 'fatigue'); subs[role] = DEC.recommend(lineup.squad, lineup.xi, slotOf(role), needsOf[role]); }
+    S.subsShown = role ? { for_role: role, for_player: nameOf(role), needs: needsOf[role],
+      candidates: subs[role].slice(0, 3).map((c) => ({ name: c.name, number: c.num, match: c.score, why: c.why })) } : null;
+    if (narrow()) return;
+    $('plan').innerHTML = S.plan.length ? S.plan.slice(0, 4).map((o, i) => `<div class="po${i === 0 ? ' top' : ''}">
+        <span class="pn">${i + 1}</span><div><b>${esc(o.title)}</b><span>${esc(o.why)}</span></div></div>`).join('')
+      : '<p class="empty">No change needed right now.</p>';
+    $('subFor').textContent = role ? `for ${nameOf(role)} (${role})` : '';
+    $('subs').innerHTML = role ? `<div class="needs">${needsOf[role].map((n) => `<span>${esc(n)}</span>`).join('')}</div>` +
+      subs[role].slice(0, 3).map((c, i) => { const p = player(c.id); return `<div class="sub${i === 0 ? ' top' : ''}">
+        ${avatar(p, 'H', '')}<div class="who"><b>${esc(c.name)}</b><span>${esc((p.pos || []).join(' · ') || p.group)}</span></div>
+        <div class="why">${c.why.map((w) => `<span>${esc(w)}</span>`).join('')}</div><em>${c.score}</em></div>`; }).join('')
+      : '<p class="empty">No fatigue data yet.</p>';
+    drawBeforeAfter();
+  }
+  // the coach's slot for a tracked role (LCDM tracked may be the coach's CDM): recommend for that slot
+  function slotOf(role) { const p = roleToPlayer[role]; return (p && p.slot) || role; }
+  function drawBeforeAfter() {
+    const top = (S.plan || []).find((o) => o.kind === 'line' || o.kind === 'shape'), sim = S.sim;
+    $('ba').hidden = !top || !sim;
+    if (!top || !sim) return;
+    const move = top.kind === 'line' ? sim.drop.move : sim.backFive.move, e = top.effect;
+    const last = sim.samples[sim.samples.length - 1];
+    for (const [v, after] of [[planBV, false], [planAV, true]]) {
+      const g = v.ctx; v.begin();
+      const ps = last.map((p) => (after && p.team === 'H' ? move(p, last) : p));
+      for (let x = 0; x < L / 3 + 6; x += 3) for (let y = 0; y < W; y += 3) {
+        let dh = 1e9, da = 1e9;
+        for (const p of ps) { const d = (p.x - x - 1.5) ** 2 + (p.y - y - 1.5) ** 2; if (p.team === 'H') dh = Math.min(dh, d); else da = Math.min(da, d); }
+        if (da < dh) { v.rect(x, y, x + 3.05, y + 3.05); g.fillStyle = hexA(lineup.kitA, 0.32); g.fill(); }
+      }
+      for (const p of ps) { const [a, b] = v.S(p.x, p.y); g.beginPath(); g.arc(a, b, 4.5, 0, 7); g.fillStyle = p.team === 'H' ? lineup.kitH : lineup.kitA; g.fill(); g.strokeStyle = '#fff'; g.lineWidth = 1; g.stroke(); }
+    }
+    $('baNow').textContent = `Now · theirs ${Math.round(e.before * 100)}%`;
+    $('baAfter').textContent = `${top.kind === 'line' ? `Line −${S.sim.drop.by} m` : 'Back five'} · theirs ${Math.round(e.after * 100)}%`;
+  }
+
   // ================================================================== loop
   let last = performance.now(), lastPanel = -1;
   function panels(force) {
     const st = interp(S.t), f = videoFrame(S.t), si = Math.max(0, Math.min(C.seconds.frames.length - 1, Math.floor(S.t)));
     squad(st, f, si, force); strip(f); advice(st);
     if (!narrow()) { feed(f); fatigueMap(f); stats(f, si); momentumChart(f); channels(f, st); setPieces(f); duels(st); }
+    planCard(f);
+    postSnapshot(f);
     priorities(f, st, si);
   }
   function loop(now) {

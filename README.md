@@ -81,7 +81,14 @@ PDF) for half-time or the team meeting: the score and the usual match statistics
 (possession, number and length of possessions, chances created, counter-attacks, dangerous transitions,
 final-third and box entries, long balls, ball wins, counter-press regains, corners, free kicks,
 throw-ins, goal kicks, team distance and sprints), momentum, the three priorities and the advice, then
-the maps. Goals, chances, counter-attacks, box entries, long balls and set-piece types come from
+the maps. Before kick-off the coach can also edit each player's profile (positions he can play, foot, three
+keywords); the **Player Recommender** ranks the bench for a role from position fit, the traits the
+situation needs and the foot, and **Plan B** ranks the options (substitution, a deeper line, a back five
+on the side they attack, the first-half counter-press, an overload where the space is) and shows the
+effect it measured by moving our players in the last 30 s of tracking (their control of our third,
+before / after). Everything the laptop shows is posted to `/api/snapshot` and written to
+`exports/demo/decisions.json` for the LLM Bench Copilot; the squad profiles go to
+`exports/demo/players.json`. Goals, chances, counter-attacks, box entries, long balls and set-piece types come from
 Metrica's Smart Tagging; the rest from our pipeline. Shots are not reported: the data has no shot
 events and the tactical camera often loses the ball in front of goal. A phone on the same Wi-Fi or on the laptop's
 hotspot opens the printed address and gets the pitch (upright) plus movement per position, and

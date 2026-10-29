@@ -62,6 +62,14 @@ Data is looked up in: `MTAH_DATA_DIR` -> `./data` -> `../Dataset Drive`.
   "Report" button = 2 A4 pages (print/PDF): match statistics for half 1 / half 2 / total
   (`match_events`, `runs`, `team_running` in clip.json) + momentum + priorities; page 2 maps.
   Shots are NOT in the data (no events, the ball is often invisible in front of goal): use "chances created".
+  `demo/decide.js` = pure decision logic (needsFor, recommend, planB), tested by `tests/decide_test.js`
+  (run through pytest when node is installed). Player profiles (pos, foot, 3 keywords) in `demo/data.js`,
+  edited in the setup. Plan B effects are simulated in app.js (`theirControl`: nearest-player control of our
+  third over the last 30 s while the opponent has the ball, our players moved as the option says); shape
+  options are only proposed when they help by 2+ points. Server: `/api/snapshot` -> `exports/demo/decisions.json`
+  (for N's Bench Copilot), `/api/lineup` -> `lineup.json` + `players.json`.
+- `scripts/broadcast_probe.py` — broadcast tracking aligned to tactical (offsets 4015 / 26919 frames, matched by
+  player positions); fills ~8% of the missing ball frames. Candidate for a v5 after Phase C.
 - `sb/export.py` — contract files in `exports/` (derived data, not committed).
 - `scripts/mask_test.py` — tests v1/v2/v3/v4 with the ball hidden ~41% in the public window.
 - PyTorch is installed separately (CUDA build from pytorch.org), needs Python <= 3.14.

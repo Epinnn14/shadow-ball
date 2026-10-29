@@ -44,16 +44,38 @@
 
   // Default squad: FC Barcelona 2026/27 numbers as published by the club on 2 Sep 2026
   // (https://www.fcbarcelona.com/en/football/first-team/news/4570894/202627-first-team-jersey-numbers-confirmed).
-  // Only a starting point: the coach edits names, numbers and the XI before kick-off.
+  // Positions, foot and the 3 keywords are a STARTING POINT for the coach, who knows his players and
+  // edits them before kick-off (profile editor in the setup). Unknown details are left empty.
+  // [number, name, group, positions it can play, foot, keywords]
   const SQUAD = [
-    [1, 'Joan Garcia', 'GK'], [2, 'João Cancelo', 'DF'], [3, 'Alejandro Balde', 'DF'], [4, 'Brian Fariñas', 'MF'],
-    [5, 'Pau Cubarsí', 'DF'], [6, 'Gavi', 'MF'], [7, 'Fermín López', 'MF'], [8, 'Pedri', 'MF'],
-    [9, 'Gabriel Jesus', 'FW'], [10, 'Lamine Yamal', 'FW'], [11, 'Raphinha', 'FW'], [12, 'Xavi Espart', 'DF'],
-    [13, 'Wojciech Szczęsny', 'GK'], [14, 'Karim Adeyemi', 'FW'], [15, 'Andreas Christensen', 'DF'],
-    [16, 'Rodrigo', 'MF'], [17, 'Anthony Gordon', 'FW'], [18, 'Gerard Martín', 'DF'], [19, 'Roony Bardghji', 'FW'],
-    [20, 'Dani Olmo', 'MF'], [21, 'Frenkie de Jong', 'MF'], [22, 'Marc Bernal', 'MF'], [23, 'Jules Koundé', 'DF'],
-    [24, 'Eric García', 'DF'], [25, 'Dominik Livaković', 'GK'], [27, 'Jesse Bisiwu', 'FW'], [29, 'Hamza Abdelkarim', 'FW'],
-  ].map(([num, name, group]) => ({ id: 'p' + num, num, name, group, photo: null }));
+    [1, 'Joan Garcia', 'GK', ['GK'], 'R', ['shot-stopping', 'sweeper', 'distribution']],
+    [2, 'João Cancelo', 'DF', ['RB', 'LB', 'RWB'], 'R', ['overlap', 'crossing', 'press resistance']],
+    [3, 'Alejandro Balde', 'DF', ['LB', 'LWB'], 'L', ['pace', 'overlap', 'recovery runs']],
+    [4, 'Brian Fariñas', 'MF', ['CM', 'CDM'], null, ['work rate', 'passing', 'pressing']],
+    [5, 'Pau Cubarsí', 'DF', ['LCB', 'RCB', 'CB'], 'R', ['passing', 'positioning', 'composure']],
+    [6, 'Gavi', 'MF', ['CM', 'LCM', 'CAM'], 'R', ['pressing', 'ball winning', 'work rate']],
+    [7, 'Fermín López', 'MF', ['CAM', 'CM', 'LW'], 'R', ['runs in behind', 'finishing', 'pressing']],
+    [8, 'Pedri', 'MF', ['CM', 'LCM', 'CAM', 'LCDM'], 'R', ['press resistance', 'passing', 'creativity']],
+    [9, 'Gabriel Jesus', 'FW', ['ST', 'CF', 'RW'], 'R', ['pressing', 'link-up', 'runs in behind']],
+    [10, 'Lamine Yamal', 'FW', ['RW'], 'L', ['dribbling', 'creativity', 'left foot']],
+    [11, 'Raphinha', 'FW', ['LW', 'RW'], 'L', ['pace', 'pressing', 'finishing']],
+    [12, 'Xavi Espart', 'DF', [], null, ['work rate', 'positioning', 'passing']],
+    [13, 'Wojciech Szczęsny', 'GK', ['GK'], 'R', ['shot-stopping', 'leadership', 'composure']],
+    [14, 'Karim Adeyemi', 'FW', ['LW', 'RW', 'ST'], 'R', ['pace', 'runs in behind', 'dribbling']],
+    [15, 'Andreas Christensen', 'DF', ['RCB', 'LCB', 'CB', 'CDM'], 'R', ['positioning', 'composure', 'passing']],
+    [16, 'Rodrigo', 'MF', [], null, ['work rate', 'passing', 'pressing']],
+    [17, 'Anthony Gordon', 'FW', ['LW'], 'R', ['pace', 'pressing', 'runs in behind']],
+    [18, 'Gerard Martín', 'DF', ['LB', 'LCB'], 'L', ['left foot', 'overlap', 'versatility']],
+    [19, 'Roony Bardghji', 'FW', ['RW'], 'L', ['dribbling', 'creativity', 'left foot']],
+    [20, 'Dani Olmo', 'MF', ['CAM', 'LW', 'CF'], 'R', ['creativity', 'finishing', 'press resistance']],
+    [21, 'Frenkie de Jong', 'MF', ['CM', 'RCDM', 'CDM'], 'R', ['press resistance', 'passing', 'composure']],
+    [22, 'Marc Bernal', 'MF', ['CDM', 'RCDM'], 'R', ['holding', 'passing', 'positioning']],
+    [23, 'Jules Koundé', 'DF', ['RB', 'RCB'], 'R', ['pace', 'recovery runs', '1v1 defending']],
+    [24, 'Eric García', 'DF', ['RCB', 'LCB', 'RB', 'CDM'], 'R', ['passing', 'positioning', 'versatility']],
+    [25, 'Dominik Livaković', 'GK', ['GK'], 'R', ['shot-stopping', 'composure', 'distribution']],
+    [27, 'Jesse Bisiwu', 'FW', [], null, ['pace', 'dribbling', 'work rate']],
+    [29, 'Hamza Abdelkarim', 'FW', ['ST'], null, ['finishing', 'aerial', 'runs in behind']],
+  ].map(([num, name, group, pos, foot, keys]) => ({ id: 'p' + num, num, name, group, pos, foot, keys, photo: null }));
 
   // A first XI for the default 4-2-1-3 (the shape our tracking found for Barcelona in half 2)
   const DEFAULT_XI = { GK: 'p1', LB: 'p3', LCB: 'p5', RCB: 'p24', RB: 'p23', LCDM: 'p8', RCDM: 'p21',

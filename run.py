@@ -255,11 +255,17 @@ def cmd_serve(args):
     import json
     state = {"frame": None, "playing": False, "speed": 1, "t": time.time()}
     lineup_path = os.path.join(paths.REPO, "exports", "demo", "lineup.json")   # local only, gitignored
+    players_path = os.path.join(paths.REPO, "exports", "demo", "players.json")
+    decisions_path = os.path.join(paths.REPO, "exports", "demo", "decisions.json")
+    snapshot = {"snapshot": None}
     MAX_LINEUP = 4 * 1024 * 1024                  # names + small photos chosen by the coach
 
     class Handler(http.server.SimpleHTTPRequestHandler):
         # /api/state : the laptop (lead) posts where the replay is; phones (follow) read it
         # /api/lineup: names, numbers, formation and photos the coach entered before kick-off
+        #              (also written as players.json: the squad profiles, without photos)
+        # /api/snapshot: what the laptop shows now (priorities, Plan B, substitutes, fatigue...),
+        #              also written to decisions.json for the Bench Copilot
         def _json(self, body, code=200):
             body = body if isinstance(body, bytes) else json.dumps(body).encode()
             self.send_response(code)
@@ -273,6 +279,8 @@ def cmd_serve(args):
             route = self.path.split("?")[0]
             if route == "/api/state":
                 return self._json(dict(state, now=time.time()))
+            if route == "/api/snapshot":
+                return self._json(snapshot)
             if route == "/api/lineup":
                 if not os.path.isfile(lineup_path):
                     return self._json({"lineup": None})
@@ -283,7 +291,7 @@ def cmd_serve(args):
         def do_POST(self):
             route = self.path.split("?")[0]
             size = int(self.headers.get("Content-Length", 0))
-            if route not in ("/api/state", "/api/lineup") or size > MAX_LINEUP:
+            if route not in ("/api/state", "/api/lineup", "/api/snapshot") or size > MAX_LINEUP:
                 self.send_error(404 if size <= MAX_LINEUP else 413)
                 return
             try:
@@ -291,11 +299,21 @@ def cmd_serve(args):
                 if route == "/api/state":
                     state.update(frame=int(data["frame"]), playing=bool(data["playing"]),
                                  speed=float(data["speed"]), t=time.time())
+                elif route == "/api/snapshot":
+                    if not isinstance(data, dict):
+                        raise ValueError("snapshot must be an object")
+                    snapshot["snapshot"] = data
+                    with open(decisions_path, "w") as handle:
+                        json.dump(data, handle, indent=1)
                 else:
                     if not isinstance(data.get("lineup"), dict):
                         raise ValueError("lineup missing")
                     with open(lineup_path, "w") as handle:
                         json.dump({"lineup": data["lineup"]}, handle)
+                    squad = [{k: v for k, v in p.items() if k != "photo"} for p in data["lineup"].get("squad", [])]
+                    with open(players_path, "w") as handle:
+                        json.dump({"formation": data["lineup"].get("formation"), "xi": data["lineup"].get("xi"),
+                                   "squad": squad}, handle, indent=1)
             except (ValueError, KeyError, TypeError):
                 self.send_error(400)
                 return

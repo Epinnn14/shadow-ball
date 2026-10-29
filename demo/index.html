@@ -59,6 +59,7 @@
     <div class="panel">
       <div class="board-head"><h2>Squad</h2><button type="button" class="ghost small" id="addPlayer">+ Player</button></div>
       <div class="squad-edit" id="squadEdit"></div>
+      <div class="profile" id="profileEditor" hidden></div>
       <p class="muted small">Photos are added from this laptop and stay on it (none are bundled: photos are copyrighted).</p>
     </div>
   </div>
@@ -134,6 +135,18 @@
       <header><h2>Need to know</h2><span class="muted small">now</span></header>
       <div class="prio" id="prio"></div>
     </section>
+    <section class="card" id="planCard">
+      <header><h2>Plan B</h2><span class="muted small">ranked · simulated on the last 30 s</span></header>
+      <div class="plan" id="plan"></div>
+      <div class="ba" id="ba" hidden>
+        <figure><canvas id="baBefore"></canvas><figcaption id="baNow">Now</figcaption></figure>
+        <figure><canvas id="baAfterC"></canvas><figcaption id="baAfter">After</figcaption></figure>
+      </div>
+    </section>
+    <section class="card">
+      <header><h2>Best substitutes</h2><span class="muted small" id="subFor"></span></header>
+      <div class="subs" id="subs"></div>
+    </section>
     <section class="card">
       <header><h2>Attack channels</h2><span class="muted small">last 15 min</span></header>
       <canvas id="channels"></canvas>
@@ -158,6 +171,7 @@
 
 <div class="loading" id="loading">Loading…</div>
 <script src="data.js"></script>
+<script src="decide.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

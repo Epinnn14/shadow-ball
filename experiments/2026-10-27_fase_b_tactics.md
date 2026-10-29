@@ -1,4 +1,4 @@
-# Fase B part 2: Transition Radar, Space Map, Shape Monitor, Stamina Monitor (2026-10-27)
+# Phase B part 2: Transition Radar, Space Map, Shape Monitor, Stamina Monitor (2026-10-27)
 
 `python run.py tactics` (after `v4` and `roles`), ~2 s. Outputs in `exports/` (derived, not committed):
 transitions.parquet, transitions_summary.json, space_maps.npz, shape.parquet, shape_alerts.json,
@@ -32,7 +32,7 @@ late-game Athletic midfielders.
 ## Limits (say these in the technical doc)
 
 - A role is not a person: substitutions and swaps are invisible, so a "tired" role can be a fresh sub
-  who plays differently. Live use needs player identity (auto-tagging at kickoff, Fase C).
+  who plays differently. Live use needs player identity (auto-tagging at kickoff, Phase C).
 - HSR depends on game state (a team defending deep runs less at high speed): risk is a prompt for
   the bench to look, not a diagnosis. Centre-backs have a small HSR baseline, so their ratio is noisy.
 - Possession labels and the reconstructed ball carry their own errors into turnover locations.

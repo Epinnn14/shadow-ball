@@ -191,3 +191,84 @@ body.setup-open #setupBtn { display: none; }
   .prow .spr { display: none; }
   .setup-grid { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* ---------- set pieces + duels */
+.tag.neutral { background: rgba(241,243,246,.08); color: var(--text); }
+.sp-legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 11px; color: var(--muted); }
+.sp-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sp-legend .tri { width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 9px solid var(--muted); }
+.sp-legend .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+.sp-legend .sq { width: 7px; height: 7px; background: var(--muted); }
+.sp-legend .ring { width: 9px; height: 9px; border-radius: 50%; border: 2px solid #fff; }
+table.mini { width: 100%; border-collapse: collapse; font-size: 12px; }
+table.mini th, table.mini td { padding: 6px 4px; text-align: right; border-bottom: 1px solid var(--line); }
+table.mini th:first-child, table.mini td:first-child { text-align: left; color: var(--muted); }
+table.mini td { font-family: var(--mono); } table.mini td:first-child { font-family: var(--sans); }
+table.mini th { font-weight: 600; color: var(--muted); }
+.duels { display: flex; flex-direction: column; gap: 6px; }
+.duel { display: grid; grid-template-columns: 8px auto 1fr; column-gap: 8px; align-items: baseline; font-size: 13px; }
+.duel i { width: 8px; height: 8px; border-radius: 50%; align-self: center; }
+.duel span { color: var(--muted); font-size: 12px; }
+.duel em { grid-column: 2 / -1; font-style: normal; font-size: 12px; color: var(--muted); font-family: var(--mono); }
+
+/* ---------- one-page report: white sheet on screen, A4 on paper */
+.report { position: fixed; inset: 0; z-index: 40; background: rgba(0,0,0,.72); overflow-y: auto; padding: 24px; }
+.rep-actions { max-width: 900px; margin: 0 auto 12px; display: flex; gap: 10px; justify-content: flex-end; }
+.sheet { max-width: 900px; margin: 0 auto; background: #fff; color: #14171C; border-radius: 12px; padding: 32px; display: flex; flex-direction: column; gap: 18px; }
+.sheet canvas { height: auto !important; border-radius: 8px; }
+.rh { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; border-bottom: 2px solid #14171C; padding-bottom: 12px; }
+.rh h1 { font-size: 24px; } .rh p { margin: 4px 0 0; color: #5B626C; font-size: 13px; }
+.rmark { display: flex; align-items: center; gap: 8px; font-size: 15px; } .rmark b { font-weight: 750; }
+.rkpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.rk { border: 1px solid #E3E6EA; border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; }
+.rk span { font-size: 11px; color: #5B626C; text-transform: uppercase; letter-spacing: .05em; }
+.rk b { font: 650 22px var(--mono); } .rk em { font-style: normal; font-size: 12px; color: #5B626C; }
+.rblock { display: flex; flex-direction: column; gap: 8px; break-inside: avoid; }
+.rblock h2 { color: #14171C; font-size: 12px; }
+.rnote { margin: 0; font-size: 11px; color: #5B626C; } .rnote b { color: #14171C; }
+.rgrid, .rpair { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.rtop, .rnext { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.rtop li { display: grid; grid-template-columns: 8px minmax(0, 1fr); column-gap: 8px; align-items: center; } .rtop i { width: 8px; height: 8px; border-radius: 50%; } .rtop span { grid-column: 2; }
+.rtop span { color: #5B626C; }
+.sheet table.mini th, .sheet table.mini td { border-color: #E3E6EA; } .sheet table.mini th, .sheet table.mini td:first-child { color: #5B626C; }
+.sheet .duel span, .sheet .duel em { color: #5B626C; }
+.rk-hidden { display: none !important; }
+.rh .score { font-family: var(--mono); padding: 0 8px; }
+.rh.small h1 { font-size: 18px; }
+table.mstats { width: 100%; border-collapse: collapse; font-size: 12px; }
+table.mstats th, table.mstats td { padding: 4px 6px; text-align: center; border-bottom: 1px solid #E3E6EA; font-family: var(--mono); }
+table.mstats td:first-child, table.mstats th:first-child { text-align: left; font-family: var(--sans); color: #3A3F47; }
+table.mstats thead th { font-family: var(--sans); font-weight: 600; color: #5B626C; font-size: 11px; }
+table.mstats thead tr:first-child th { border-bottom: none; color: #14171C; }
+table.mstats td.b { font-weight: 700; background: #F4F5F7; }
+table.mstats td:nth-child(2n+2), table.mstats thead tr:last-child th:nth-child(2n+2) { border-left: 1px solid #E3E6EA; }
+.pagebreak { height: 0; }
+.rf { font-size: 10px; color: #8A919C; border-top: 1px solid #E3E6EA; padding-top: 10px; }
+body.report-open { overflow: hidden; }
+@media print {
+  @page { size: A4; margin: 10mm; }
+  body { background: #fff; }
+  body.report-open > *:not(#report) { display: none !important; }
+  .report { position: static; padding: 0; background: none; overflow: visible; }
+  .rep-actions { display: none; }
+  .sheet { max-width: none; padding: 0; border-radius: 0; gap: 12px; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  html, body { background: #fff !important; }
+  /* one A4 page */
+  .sheet { gap: 8px; font-size: 11px; }
+  .rh { padding-bottom: 8px; } .rh h1 { font-size: 20px; }
+  .rkpis { grid-template-columns: repeat(6, 1fr); gap: 6px; }
+  .rk { padding: 6px 8px; } .rk span { font-size: 8px; } .rk b { font-size: 16px; } .rk em { font-size: 9px; }
+  .rgrid, .rpair { gap: 14px; }
+  .rgrid { display: flex; flex-wrap: wrap; }
+  .rgrid > .rblock { width: calc(50% - 7px); break-inside: auto; }
+  .rgrid canvas { max-height: 150px; width: auto !important; max-width: 100%; }
+  .rtop, .rnext { font-size: 11px; gap: 4px; }
+  .sheet table.mini { font-size: 9.5px; } .sheet table.mini th, .sheet table.mini td { padding: 2px 4px; }
+  .sheet .duels { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; }
+  .sheet .duel { font-size: 10px; } .sheet .duel em, .sheet .duel span { font-size: 9px; }
+  .rnote { font-size: 9px; } .rf { font-size: 8px; padding-top: 6px; }
+  .pagebreak { break-before: page; }
+  table.mstats { font-size: 10px; } table.mstats th, table.mstats td { padding: 3px 5px; }
+  .rgrid canvas { max-height: 240px; }
+}

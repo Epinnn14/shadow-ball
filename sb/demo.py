@@ -203,6 +203,12 @@ def build(track, labels, ball, sigma, source, role_df, tactics_dir, minute_from=
     events.sort(key=lambda e: e["frame"])
 
     momentum, entries = momentum_and_entries(lab, ball, sides, half, last)
+    from . import tagging
+    tags = tagging.load()
+    setpieces = set_pieces(tags, lab, ball, source, sides, half, last)
+    events_st = match_events(tags, lab, last)
+    runs = label_runs(lab, half, last)
+    running = team_running(pd.read_parquet(os.path.join(tactics_dir, "movement.parquet")))
 
     with open(os.path.join(tactics_dir, "formations.json")) as handle:
         formations = json.load(handle)
@@ -224,7 +230,8 @@ def build(track, labels, ball, sigma, source, role_df, tactics_dir, minute_from=
                  "attacks_right": {side: bool(sides[(t, half)]) for t, side in ((0, "H"), (1, "A"))}},
         "frames": frames, "seconds": {"frames": secs.tolist(), "movement": cum, "shape": shape},
         "timeline": timeline, "events": events, "stamina": stam_rows, "transitions": tr_rows,
-        "momentum": momentum, "entries": entries,
+        "momentum": momentum, "entries": entries, "setpieces": setpieces,
+        "match_events": events_st, "runs": runs, "team_running": running,
     }
 
 
@@ -273,6 +280,102 @@ def momentum_and_entries(lab, ball, sides, half, last):
                 entries.append([int(a + c), team, round(float(y[c]), 1)])
     entries.sort()
     return momentum, entries
+
+
+ST_KINDS = {"Corner Kick": "corner", "Free Kick": "freekick", "Throw-in": "throw", "Goal Kick": "goalkick",
+            "Kick Off (Start)": "kickoff", "Kick Off (After Goal)": "kickoff"}
+
+
+def tag_side(tag, lab):
+    """Team of a Smart Tagging instance. Throw-ins come without one: the team that has the ball
+    once the dead ball that follows the tag is over (or 2 s after the tag if no dead ball)."""
+    if tag["side"] in ("H", "A"):
+        return tag["side"]
+    f0, n = tag["start"], len(lab)
+    seg = lab[f0:min(n, f0 + 30 * paths.FPS)]
+    dead = np.where(seg[:15 * paths.FPS] == "D")[0]
+    if len(dead):
+        live = np.where(np.isin(seg[dead[0]:], ["H", "A"]))[0]
+        return str(seg[dead[0] + live[0]]) if len(live) else None
+    k = 2 * paths.FPS
+    return str(seg[k]) if len(seg) > k and seg[k] in ("H", "A") else None
+
+
+def set_pieces(tags, lab, ball, source, sides, half, last):
+    """Set pieces from Metrica's Smart Tagging (type and team), placed where the ball was seen
+    around the restart: [frame, team, kind, x, y (OUR attacking frame), kept the ball 10 s later,
+    ball reached the opponent's box within 10 s]. A free kick in the final third is 'freekick_final'."""
+    length, width = paths.PITCH
+    half_of = paths.half_of_frames()
+    out = []
+    for tag in tags:
+        kind = ST_KINDS.get(tag["type"]) if tag["code"] == "SET PIECES" else None
+        f = tag["start"]
+        if kind is None or f > last or f >= len(half_of) or half_of[f] == 0:
+            continue
+        h = int(half_of[f])
+        team = tag_side(tag, lab)
+        if team is None:
+            continue
+        t = 0 if team == "H" else 1
+        window = np.arange(max(0, f - 50), min(len(ball) - 1, f + 50) + 1)
+        seen = window[source[window] == 0]
+        fr = seen[np.argmin(np.abs(seen - f))] if len(seen) else f
+        x, y = ball[fr]
+        if np.isnan(x):
+            continue
+        right = sides[(t, h)]
+        tx, ty = (x, y) if right else (length - x, width - y)
+        if kind == "freekick" and tx > FINAL_THIRD:
+            kind = "freekick_final"
+        end = min(paths.HALVES[h - 1][1], f + 10 * paths.FPS)
+        bx = ball[f:end + 1, 0] if right else length - ball[f:end + 1, 0]
+        by = ball[f:end + 1, 1] if right else width - ball[f:end + 1, 1]
+        in_box = bool(np.any((bx > length - 16.5) & (np.abs(by - width / 2) < 20.16) & (lab[f:end + 1] == team)))
+        ox, oy = (x, y) if sides[(0, h)] else (length - x, width - y)
+        out.append([int(f), team, kind, round(float(ox), 1), round(float(oy), 1), bool(lab[end] == team), in_box])
+    return out
+
+
+TAG_STATS = ("GOALS", "CREATING CHANCES", "ATTACKING TRANSITION", "BALL IN THE BOX", "LONG BALL", "BUILD UP",
+             "PROGRESSION", "BALL IN FINAL THIRD")
+
+
+def match_events(tags, lab, last):
+    """Smart Tagging instances the report counts, up to the end of the clip: [frame, code, team]."""
+    half_of = paths.half_of_frames()
+    out = []
+    for tag in tags:
+        f = tag["start"]
+        if tag["code"] not in TAG_STATS or f > last or f >= len(half_of) or half_of[f] == 0:
+            continue
+        team = tag_side(tag, lab)
+        if team:
+            out.append([int(f), tag["code"], team])
+    return sorted(out)
+
+
+def label_runs(lab, half, last):
+    """Possession labels (X filled) as runs [frame, label] per half, up to the end of the clip;
+    a run of the next half starts a new list entry, the report finds halves from the frames."""
+    out = []
+    for h in (1, 2):
+        if h > half:
+            break
+        a, b = paths.HALVES[h - 1]
+        seg = lab[a:(b if h < half else last) + 1]
+        change = np.concatenate(([0], np.where(seg[1:] != seg[:-1])[0] + 1))
+        out.extend([int(a + c), str(seg[c])] for c in change)
+        out.append([int((b if h < half else last) + 1), "end"])
+    return out
+
+
+def team_running(movement_df):
+    """Team totals per 5-min block: [team, half, minute, km, hsr km, sprints]."""
+    g = movement_df[movement_df.label != "GK"].groupby(["team", "half", "minute_from"])
+    agg = g.agg(d=("distance_m", "sum"), h=("hsr_m", "sum"), s=("sprints", "sum")).reset_index()
+    return [[r.team, int(r.half), int(r.minute_from), round(r.d / 1000, 2), round(r.h / 1000, 2), int(r.s)]
+            for r in agg.itertuples()]
 
 
 def _role_means(entry):

@@ -321,8 +321,8 @@ def cmd_serve(args):
                                              functools.partial(Handler, directory=root))
     print("Shadow Ball demo")
     print("  laptop : http://localhost:{}".format(args.port))
-    print("  HP     : http://{}:{}  (Wi-Fi/hotspot yang sama; izinkan Python di firewall 'Private')".format(ip, args.port))
-    print("Ctrl+C untuk berhenti. Data hanya dilayani dari laptop ini, tidak diunggah ke mana pun.")
+    print("  phone  : http://{}:{}  (same Wi-Fi / hotspot; allow Python on 'Private' networks in the firewall)".format(ip, args.port))
+    print("Ctrl+C to stop. The data is served from this laptop only and never uploaded.")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

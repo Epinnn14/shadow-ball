@@ -259,3 +259,20 @@ def test_demo_block_end_and_running_totals():
     dist, hsr, sprints, top = demo.cumulative_role_stats(speed)
     assert abs(dist[-1] - 16.0) < 1e-6 and abs(hsr[-1] - 16.0) < 1e-6
     assert sprints[-1] == 1 and abs(top[-1] - 28.8) < 1e-3
+
+
+def test_label_runs_and_tag_side():
+    from sb import demo
+    lab = np.full(paths.N_FRAMES, "D", dtype="<U1")
+    a, b = paths.HALVES[0]
+    lab[a:a + 100] = "H"
+    lab[a + 100:a + 300] = "A"
+    runs = demo.label_runs(lab, 1, b)
+    assert runs[:3] == [[a, "H"], [a + 100, "A"], [a + 300, "D"]] and runs[-1] == [b + 1, "end"]
+    lab[a + 300:a + 400] = "D"
+    lab[a + 400:a + 600] = "A"
+    # throw-in tagged as the ball goes out: the team that restarts after the dead ball
+    assert demo.tag_side({"side": None, "start": a + 250}, lab) == "A"
+    lab2 = np.full(paths.N_FRAMES, "H", dtype="<U1")
+    assert demo.tag_side({"side": None, "start": a}, lab2) == "H"      # no dead ball: 2 s later
+    assert demo.tag_side({"side": "A", "start": a}, lab) == "A"

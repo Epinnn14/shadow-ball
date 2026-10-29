@@ -1,41 +1,41 @@
-# Fase B — label posisi + statistik pergerakan
+# Phase B — position labels + movement statistics
 
 `python run.py roles` -> `exports/roles.parquet`, `exports/formations.json`,
-`exports/movement.parquet`, `exports/heatmaps.npz` (data turunan: JANGAN di-commit).
+`exports/movement.parquet`, `exports/heatmaps.npz` (derived data: DO NOT commit).
 
-## Cara kerja (sb/roles.py, sb/movement.py)
-- Koordinat dinormalkan per tim per babak: tim selalu menyerang ke +x, sisi KIRI tim = y kecil.
-  Dicek dengan homography: y = 0 adalah garis samping jauh (atas gambar kamera taktikal), dan tim
-  yang menyerang ke kanan kamera punya garis samping jauh di sisi kirinya.
-- Kiper: pemain terdalam, < 25 m dari gawang sendiri dan >= 5 m di belakang pemain berikutnya.
-- 10 pemain lapangan dicocokkan tiap frame ke 10 slot bentuk rata-rata tim (algoritma Hungarian,
-  posisi relatif terhadap centroid tim; gaya Bialkowski dkk. 2014). Tahan terhadap ID track tertukar.
-- Bentuk yang MEMBERI NAMA dipasang hanya pada frame saat tim TIDAK menguasai bola (dari v4.1):
-  saat menyerang, bek sayap naik dan tim bisa terlihat 2-3-5; saat bertahan, posisi dasar terlihat.
-- Lini: bek = 3/4/5 pemain terdalam, dipotong di celah kedalaman terbesar (bek empat diberi
-  keunggulan 3 m); sisanya dipisah di setiap celah >= 5 m (sehingga 4-2-3-1, 4-4-1-1 terbaca).
-- Nama: bek LB/CB/RB (LWB/RWB bila 5); gelandang LM/RM (lebar), CDM/CM/CAM (kedalaman);
-  penyerang LW/RW (lebar), ST (CF untuk yang lebih dalam dari dua penyerang tengah).
-  Nama kembar diberi sisi: LCB/RCB, LCDM/RCDM, LCM/CM/RCM.
-- Pergerakan per posisi per 5 menit: jarak, lari intensitas tinggi (> 19,8 km/h), sprint
-  (> 25,2 km/h selama >= 1 dtk), kecepatan puncak (persentil 99), posisi rata-rata, cakupan;
-  heatmap 21 x 14 per posisi per babak. Kecepatan > 11 m/s dianggap glitch tracking.
+## How it works (sb/roles.py, sb/movement.py)
+- Coordinates are normalized per team per half: the team always attacks towards +x, the team's LEFT side = small y.
+  Checked with the homography: y = 0 is the far touchline (top of the tactical camera image), and the team
+  attacking to the camera's right has the far touchline on its left side.
+- Goalkeeper: the deepest player, < 25 m from their own goal and >= 5 m behind the next player.
+- The 10 outfield players are matched each frame to the 10 slots of the team's average shape (Hungarian algorithm,
+  positions relative to the team centroid; in the style of Bialkowski et al. 2014). Robust to swapped track IDs.
+- The shape that assigns the NAMES is fitted only on frames when the team is NOT in possession (from v4.1):
+  in attack the full-backs push up and the team can look like 2-3-5; in defence the base positions are visible.
+- Lines: defenders = the 3/4/5 deepest players, cut at the largest depth gap (a back four is given a
+  3 m advantage); the rest are split at every gap >= 5 m (so 4-2-3-1 and 4-4-1-1 are recognized).
+- Names: defenders LB/CB/RB (LWB/RWB if 5); midfielders LM/RM (width), CDM/CM/CAM (depth);
+  forwards LW/RW (width), ST (CF for the deeper of two central forwards).
+  Duplicate names get a side: LCB/RCB, LCDM/RCDM, LCM/CM/RCM.
+- Movement per position per 5 minutes: distance, high-intensity running (> 19.8 km/h), sprints
+  (> 25.2 km/h for >= 1 s), top speed (99th percentile), average position, coverage;
+  21 x 14 heatmap per position per half. Speeds > 11 m/s are treated as tracking glitches.
 
-## Hasil
+## Results
 
-| Tim / babak | Formasi saat bertahan |
+| Team / half | Formation out of possession |
 | --- | --- |
-| Barcelona babak 1 | 4-2-3-1 |
-| Athletic babak 1 | 4-4-2 |
-| Barcelona babak 2 | 4-2-1-3 |
-| Athletic babak 2 | 4-5-1 |
+| Barcelona half 1 | 4-2-3-1 |
+| Athletic half 1 | 4-4-2 |
+| Barcelona half 2 | 4-2-1-3 |
+| Athletic half 2 | 4-5-1 |
 
-Cek kewajaran (tanpa ground truth): pemain lapangan 9,5-12 km per posisi sepanjang laga,
-kecepatan puncak 25-31 km/h, cakupan peran 86-94% frame. Kiper hanya 19-26% (kamera taktikal
-sering tidak memperlihatkan area gawang) -> statistik kiper tidak bisa dipercaya.
+Sanity check (no ground truth): outfield players 9.5-12 km per position over the match,
+top speed 25-31 km/h, role coverage 86-94% of frames. Goalkeepers only 19-26% (the tactical camera
+often does not show the goal area) -> goalkeeper statistics cannot be trusted.
 
-## Batasan
-- Label = peran taktis dalam bentuk rata-rata, bukan posisi resmi pemain; tanpa nama pemain.
-- Barça babak 2 sempat terbaca 5-1-1-3 sebelum keunggulan bek empat dinaikkan dari 2 ke 3 m:
-  kasus perbatasan (gelandang bertahan turun di antara bek tengah).
-- Jarak adalah perkiraan BAWAH saat pemain hilang dari tracking (lihat kolom `coverage`).
+## Limits
+- Label = tactical role in the average shape, not the player's official position; no player names.
+- Barça half 2 was briefly read as 5-1-1-3 before the back-four advantage was raised from 2 to 3 m:
+  a borderline case (defensive midfielder dropping between the centre-backs).
+- Distance is a LOWER estimate when a player is lost from tracking (see the `coverage` column).

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="id">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -20,12 +20,13 @@
     <span class="poss" id="poss"></span>
   </div>
   <div class="transport">
-    <button type="button" class="icon play" id="playBtn" aria-label="Putar"></button>
-    <input type="range" id="scrub" min="0" max="1" step="0.2" value="0" aria-label="Waktu replay">
-    <div class="seg" id="speeds" role="group" aria-label="Kecepatan">
+    <button type="button" class="icon play" id="playBtn" aria-label="Play"></button>
+    <input type="range" id="scrub" min="0" max="1" step="0.2" value="0" aria-label="Replay time">
+    <div class="seg" id="speeds" role="group" aria-label="Speed">
       <button type="button" data-speed="1" class="on">1×</button><button type="button" data-speed="3">3×</button><button type="button" data-speed="10">10×</button>
     </div>
     <button type="button" class="ghost desk" id="setupBtn">Line-up</button>
+    <button type="button" class="ghost desk" id="reportBtn">Report</button>
     <button type="button" class="ghost" id="followBtn" hidden></button>
   </div>
 </header>
@@ -34,31 +35,31 @@
 <section class="setup" id="setup" hidden>
   <div class="setup-head">
     <div>
-      <h1>Persiapan kick-off</h1>
-      <p class="muted">Pilih formasi, isi nama dan nomor, lalu pasang pemain ke posisi. Shadow Ball mencocokkan posisi ini dengan pemain yang terdeteksi kamera.</p>
+      <h1>Kick-off setup</h1>
+      <p class="muted">Pick a formation, enter names and numbers, then place your players. Shadow Ball matches these positions to the players the camera detects.</p>
     </div>
-    <button type="button" class="primary" id="startBtn">Mulai live</button>
+    <button type="button" class="primary" id="startBtn">Go live</button>
   </div>
   <div class="setup-grid">
     <div class="panel">
-      <h2>Formasi</h2>
+      <h2>Formation</h2>
       <div class="formations" id="formationList"></div>
-      <h2 class="mt">Lawan</h2>
-      <label class="field"><span>Nama</span><input id="oppName" maxlength="40"></label>
+      <h2 class="mt">Opponent</h2>
+      <label class="field"><span>Name</span><input id="oppName" maxlength="40"></label>
       <div class="kits">
-        <label class="field"><span>Warna kita</span><input type="color" id="kitH" value="#3D7BFF"></label>
-        <label class="field"><span>Warna lawan</span><input type="color" id="kitA" value="#F2613F"></label>
+        <label class="field"><span>Our colour</span><input type="color" id="kitH" value="#3D7BFF"></label>
+        <label class="field"><span>Their colour</span><input type="color" id="kitA" value="#F2613F"></label>
       </div>
       <p class="muted small" id="detected"></p>
     </div>
     <div class="panel board">
-      <div class="board-head"><h2 id="boardTitle">Susunan pemain</h2><span class="muted small" id="slotHint">Klik posisi, lalu klik pemain</span></div>
+      <div class="board-head"><h2 id="boardTitle">Line-up</h2><span class="muted small" id="slotHint">Click a position, then a player</span></div>
       <div class="board-pitch" id="board"></div>
     </div>
     <div class="panel">
-      <div class="board-head"><h2>Skuad</h2><button type="button" class="ghost small" id="addPlayer">+ Pemain</button></div>
+      <div class="board-head"><h2>Squad</h2><button type="button" class="ghost small" id="addPlayer">+ Player</button></div>
       <div class="squad-edit" id="squadEdit"></div>
-      <p class="muted small">Foto ditambahkan sendiri dari laptop dan hanya disimpan di laptop ini (tidak dibundel: hak cipta foto).</p>
+      <p class="muted small">Photos are added from this laptop and stay on it (none are bundled: photos are copyrighted).</p>
     </div>
   </div>
 </section>
@@ -66,15 +67,15 @@
 <main class="livegrid" id="live">
   <div class="col-main">
     <section class="stage">
-      <div class="strip phoneonly" id="strip" aria-label="Possession per menit"></div>
-      <div class="mom desk"><span class="muted small">Momentum</span><canvas id="momentum" aria-label="Momentum per menit: bola di sepertiga lawan (atas) dan di sepertiga kita (bawah)"></canvas></div>
+      <div class="strip phoneonly" id="strip" aria-label="Possession per minute"></div>
+      <div class="mom desk"><span class="muted small">Momentum</span><canvas id="momentum" aria-label="Momentum per minute: ball in their final third (up) and in ours (down)"></canvas></div>
       <div class="pitch-holder">
-        <canvas id="pitch" aria-label="Lapangan live"></canvas>
+        <canvas id="pitch" aria-label="Live pitch"></canvas>
         <div class="layers desk" id="layers">
           <button type="button" class="chip on" data-layer="ghost"><i class="sw"></i>Shadow Team</button>
           <button type="button" class="chip on" data-layer="cloud"><i class="sw"></i>Shadow Ball</button>
-          <button type="button" class="chip on" data-layer="zones"><i class="sw"></i>Zona kontrol</button>
-          <button type="button" class="chip on" data-layer="names"><i class="sw"></i>Nama</button>
+          <button type="button" class="chip on" data-layer="zones"><i class="sw"></i>Control zones</button>
+          <button type="button" class="chip on" data-layer="names"><i class="sw"></i>Names</button>
         </div>
         <div class="dir" id="dir"></div>
       </div>
@@ -82,27 +83,41 @@
     </section>
 
     <section class="card phoneonly">
-      <header><h2>Perlu diketahui</h2><span class="muted small">sekarang</span></header>
+      <header><h2>Need to know</h2><span class="muted small">now</span></header>
       <div class="prio" id="prioPhone"></div>
     </section>
 
     <div class="advice desk">
       <article class="adv" id="advAtk">
-        <header><span class="tag atk">Menyerang</span><span class="muted small">30 dtk terakhir</span></header>
+        <header><span class="tag atk">Attack</span><span class="muted small">last 30 s</span></header>
         <canvas></canvas>
         <div class="adv-text"><b></b><span></span></div>
       </article>
       <article class="adv" id="advDef">
-        <header><span class="tag def">Bertahan</span><span class="muted small">30 dtk terakhir</span></header>
+        <header><span class="tag def">Defend</span><span class="muted small">last 30 s</span></header>
         <canvas></canvas>
         <div class="adv-text"><b></b><span></span></div>
       </article>
     </div>
 
+    <div class="advice desk">
+      <article class="adv" id="spCard">
+        <header><span class="tag neutral">Set pieces</span><span class="muted small">since kick-off · Smart Tagging</span></header>
+        <canvas id="spMap"></canvas>
+        <div class="sp-legend"><span><i class="tri"></i>corner</span><span><i class="dot"></i>free kick</span><span><i class="sq"></i>throw-in</span><span><i class="ring"></i>ball reached the box</span></div>
+        <div id="spTable"></div>
+      </article>
+      <article class="adv" id="duelCard">
+        <header><span class="tag def">Duel 1v1</span><span class="muted small">last 10 min · our half</span></header>
+        <canvas id="duelMap"></canvas>
+        <div class="duels" id="duelList"></div>
+      </article>
+    </div>
+
     <section class="squad">
       <div class="squad-head">
-        <h2>Pergerakan</h2>
-        <div class="seg" id="teamTabs"><button type="button" data-team="H" class="on" id="tabH">Kita</button><button type="button" data-team="A" id="tabA">Lawan</button></div>
+        <h2>Movement</h2>
+        <div class="seg" id="teamTabs"><button type="button" data-team="H" class="on" id="tabH">Us</button><button type="button" data-team="A" id="tabA">Them</button></div>
       </div>
       <div class="squad-body">
         <div class="plist" id="plist"></div>
@@ -116,18 +131,18 @@
 
   <aside class="col-side desk">
     <section class="card">
-      <header><h2>Perlu diketahui</h2><span class="muted small">sekarang</span></header>
+      <header><h2>Need to know</h2><span class="muted small">now</span></header>
       <div class="prio" id="prio"></div>
     </section>
     <section class="card">
-      <header><h2>Jalur serangan</h2><span class="muted small">15 menit terakhir</span></header>
+      <header><h2>Attack channels</h2><span class="muted small">last 15 min</span></header>
       <canvas id="channels"></canvas>
       <p class="note" id="watch"></p>
     </section>
     <section class="card">
-      <header><h2>Kesegaran</h2><span class="muted small" id="fatigueNote"></span></header>
+      <header><h2>Freshness</h2><span class="muted small" id="fatigueNote"></span></header>
       <canvas id="fatigueMap"></canvas>
-      <div class="scale"><span><i style="background:var(--ok)"></i>segar</span><span><i style="background:var(--warn)"></i>waspada</span><span><i style="background:var(--bad)"></i>lelah</span></div>
+      <div class="scale"><span><i style="background:var(--ok)"></i>fresh</span><span><i style="background:var(--warn)"></i>watch</span><span><i style="background:var(--bad)"></i>tired</span></div>
     </section>
     <section class="card">
       <header><h2>Copilot</h2><span class="muted small" id="feedCount"></span></header>
@@ -136,7 +151,12 @@
   </aside>
 </main>
 
-<div class="loading" id="loading">Memuat…</div>
+<section class="report" id="report" hidden>
+  <div class="rep-actions"><button type="button" class="primary" id="repPrint">Print / save PDF</button><button type="button" class="ghost" id="repClose">Close</button></div>
+  <div class="sheet" id="repBody"></div>
+</section>
+
+<div class="loading" id="loading">Loading…</div>
 <script src="data.js"></script>
 <script src="app.js"></script>
 </body>

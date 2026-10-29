@@ -8,7 +8,7 @@
   'use strict';
   const D = window.SB_DATA;
   const $ = (id) => document.getElementById(id);
-  const fmt1 = (v) => (Math.round(v * 10) / 10).toFixed(1).replace('.', ',');
+  const fmt1 = (v) => (Math.round(v * 10) / 10).toFixed(1);
   const params = new URLSearchParams(location.search);
   const narrow = () => matchMedia('(max-width: 900px)').matches;
   const CSS = getComputedStyle(document.documentElement);
@@ -16,7 +16,7 @@
   const LEVEL = { red: COL.bad, amber: COL.warn, green: COL.ok, 'no data': '#4B5159' };
   let L = 105.3, W = 68;
 
-  let C, meta, labels, nFrames, duration, flipH;
+  let C, meta, labels, nFrames, duration, flipH, half1End = Infinity;
   const inClip = new Set();
   const S = { t: 0, playing: false, speed: 1, team: 'H', sel: null, follow: false,
               layers: { ghost: true, cloud: true, zones: true, names: true }, seen: new Set(), feedKey: '' };
@@ -24,7 +24,7 @@
 
   // ================================================================== load
   Promise.all([
-    fetch('data/clip.json').then((r) => { if (!r.ok) throw new Error('clip.json belum ada: jalankan python run.py demo'); return r.json(); }),
+    fetch('data/clip.json').then((r) => { if (!r.ok) throw new Error('No clip.json yet: run python run.py demo'); return r.json(); }),
     fetch('api/lineup', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : { lineup: null })).catch(() => ({ lineup: null })),
   ]).then(([clip, saved]) => init(clip, saved.lineup)).catch((e) => { $('loading').textContent = e.message; });
 
@@ -34,6 +34,9 @@
     nFrames = C.frames.length; duration = (nFrames - 1) / meta.sample_fps;
     flipH = !meta.attacks_right.H;
     for (const fr of C.frames) for (const p of fr[3]) inClip.add(key(p));
+    for (const [fr, code, team] of C.match_events) if (code === 'GOALS') C.events.push({ frame: fr, kind: 'goal', team });
+    C.events.sort((a, b) => a.frame - b.frame);
+    half1End = (C.runs.find((r) => r[1] === 'end') || [Infinity])[0] - 1;
     S.follow = params.get('mode') === 'follow' || (params.get('mode') !== 'lead' && narrow());
     lineup = savedLineup || readLocal() || defaultLineup();
     applyLineup();
@@ -52,7 +55,7 @@
   // ================================================================== geometry
   const key = (p) => `${p[1] === 0 ? 'H' : 'A'}:${labels[p[2]]}`;
   const tf = (x, y) => (flipH ? [L - x, W - y] : [x, y]);           // raw camera frame -> our attacking frame
-  const lane = (y) => (y < W / 3 ? 'kiri' : y < 2 * W / 3 ? 'tengah' : 'kanan');
+  const lane = (y) => (y < W / 3 ? 'left' : y < 2 * W / 3 ? 'middle' : 'right');
 
   function hungarian(a) {             // square cost matrix -> assignment row i -> column
     const n = a.length, INF = 1e18, u = Array(n + 1).fill(0), v = Array(n + 1).fill(0), p = Array(n + 1).fill(0), way = Array(n + 1).fill(0);
@@ -190,6 +193,7 @@
       }
     });
     $('match').textContent = `${meta.teams.H} – ${lineup.oppName || meta.teams.A} · ${lineup.formation} vs ${meta.formation.A}`;
+    $('match').dataset.score = '';
     $('tabA').textContent = (lineup.oppName || meta.teams.A).split(' ')[0];
     $('tabH').textContent = meta.teams.H;
     advCache = -1; heatCache = '';
@@ -200,7 +204,7 @@
   function openSetup() {
     S.playing = false; $('setup').hidden = false; $('live').hidden = true; document.body.classList.add('setup-open');
     $('oppName').value = lineup.oppName || meta.teams.A; $('kitH').value = lineup.kitH; $('kitA').value = lineup.kitA;
-    $('detected').textContent = `Terdeteksi dari tracking babak ${meta.half}: ${meta.teams.H} ${meta.formation.H}, lawan ${meta.formation.A}. Nama dipasang ke pemain terdekat secara otomatis, jadi formasi pilihanmu boleh berbeda.`;
+    $('detected').textContent = `Detected from tracking, half ${meta.half}: ${meta.teams.H} ${meta.formation.H}, opponent ${meta.formation.A}. Names are matched to the nearest tracked player automatically, so your formation may differ.`;
     renderSetup();
   }
   function closeSetup() {
@@ -217,14 +221,14 @@
       `<button type="button" class="fm${f === lineup.formation ? ' on' : ''}" data-f="${f}">${formationSvg(f)}<span>${f}</span></button>`).join('');
     $('formationList').querySelectorAll('.fm').forEach((b) => b.onclick = () => changeFormation(b.dataset.f));
     const slots = D.slots(lineup.formation);
-    $('boardTitle').textContent = `Susunan pemain · ${lineup.formation}`;
+    $('boardTitle').textContent = `Line-up · ${lineup.formation}`;
     $('board').innerHTML = slots.map((s) => {
       const p = player(lineup.xi[s.label]);
       return `<button type="button" class="slot${p ? '' : ' empty'}${selSlot === s.label ? ' sel' : ''}" data-s="${s.label}"
-        style="left:${6 + s.x * 88}%;top:${94 - s.y * 86}%">${avatar(p, 'H', s.label)}<span class="nm">${p ? esc(shortName(p)) : 'Kosong'}</span><span class="rl">${s.label}</span></button>`;
+        style="left:${6 + s.x * 88}%;top:${94 - s.y * 86}%">${avatar(p, 'H', s.label)}<span class="nm">${p ? esc(shortName(p)) : 'Empty'}</span><span class="rl">${s.label}</span></button>`;
     }).join('');
     $('board').querySelectorAll('.slot').forEach((b) => b.onclick = () => { selSlot = selSlot === b.dataset.s ? null : b.dataset.s; renderSetup(); });
-    $('slotHint').textContent = selSlot ? `Pilih pemain untuk ${selSlot} dari skuad` : 'Klik posisi, lalu klik pemain';
+    $('slotHint').textContent = selSlot ? `Pick a player for ${selSlot} from the squad` : 'Click a position, then a player';
     const inXI = {}; for (const [l, id] of Object.entries(lineup.xi)) inXI[id] = l;
     $('squadEdit').innerHTML = lineup.squad.map((p) => `<div class="se${inXI[p.id] ? ' inxi' : ''}${selSlot ? ' pick' : ''}" data-id="${p.id}">
         <label class="av" title="Tambah foto" style="${p.photo ? `background-image:url(${p.photo})` : ''}">${p.photo ? '' : initials(p.name)}<input type="file" accept="image/*" hidden></label>
@@ -276,7 +280,7 @@
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   $('addPlayer').onclick = () => {
     const num = Math.max(0, ...lineup.squad.map((p) => p.num)) + 1;
-    lineup.squad.push({ id: 'n' + Date.now(), num, name: 'Pemain baru', group: 'MF', photo: null }); renderSetup();
+    lineup.squad.push({ id: 'n' + Date.now(), num, name: 'New player', group: 'MF', photo: null }); renderSetup();
   };
 
   // ================================================================== time + sync
@@ -300,7 +304,7 @@
         body: JSON.stringify({ frame: videoFrame(S.t), playing: S.playing, speed: S.speed }) }).catch(() => {});
     }
   }
-  function updateFollow() { const b = $('followBtn'); b.hidden = false; b.textContent = S.follow ? 'Ikuti laptop ✓' : 'Ikuti laptop'; }
+  function updateFollow() { const b = $('followBtn'); b.hidden = false; b.textContent = S.follow ? 'Follow laptop ✓' : 'Follow laptop'; }
   function markSpeed() { document.querySelectorAll('#speeds button').forEach((b) => b.classList.toggle('on', +b.dataset.speed === S.speed)); }
   function takeOver() { if (S.follow) { S.follow = false; updateFollow(); } }
 
@@ -314,6 +318,9 @@
     });
     $('followBtn').onclick = () => { S.follow = !S.follow; updateFollow(); };
     $('setupBtn').onclick = openSetup;
+    $('reportBtn').onclick = openReport;
+    $('repClose').onclick = () => { $('report').hidden = true; document.body.classList.remove('report-open'); };
+    $('repPrint').onclick = () => window.print();
     $('startBtn').onclick = closeSetup;
     addEventListener('resize', () => { buildViews(); panels(true); });
     addEventListener('keydown', (e) => {
@@ -345,7 +352,7 @@
     let poss = 'D'; for (let j = i; j >= 0; j--) if (C.frames[j][1] !== 'X') { poss = C.frames[j][1]; break; }
     return { idx: i, frame: a[0], players, ball, poss };
   }
-  function framePlayers(i) { return C.frames[i][3].map((p) => { const [x, y] = tf(p[3], p[4]); return { k: key(p), team: p[1] === 0 ? 'H' : 'A', role: labels[p[2]], x, y }; }); }
+  function framePlayers(i) { return C.frames[i][3].map((p) => { const [x, y] = tf(p[3], p[4]); return { k: key(p), team: p[1] === 0 ? 'H' : 'A', role: labels[p[2]], x, y, v: p[5] }; }); }
 
   function blockEnd(half, minute) { return half < meta.half ? -Infinity : meta.half_start + (minute + 5 - (half === 1 ? 0 : 45)) * 60 * meta.fps; }
   function latestStamina(f) { const out = {}; for (const r of C.stamina) if (blockEnd(r.half, r.minute) <= f) out[`${r.team}:${r.label}`] = r; return out; }
@@ -367,18 +374,20 @@
   }
 
   // ================================================================== views
-  let main, advA, advD, fatigueV, heatV, channelsV;
+  let main, advA, advD, fatigueV, heatV, channelsV, spV, duelV;
   function buildViews() {
     const holder = $('pitch').parentElement;
     main = new PitchView($('pitch'), { portrait: narrow(), m: 2.5 });
     main.layout(holder.clientWidth);
-    $('dir').textContent = narrow() ? '' : `${meta.teams.H} menyerang →`;
+    $('dir').textContent = narrow() ? '' : `${meta.teams.H} attacking →`;
     if (!narrow()) {
       advA = new PitchView($('advAtk').querySelector('canvas'), { portrait: true, x0: 50, x1: L, m: 1.5 });
       advD = new PitchView($('advDef').querySelector('canvas'), { portrait: true, x0: 0, x1: L - 50, m: 1.5 });
       advA.layout($('advAtk').clientWidth - 28); advD.layout($('advDef').clientWidth - 28);
       fatigueV = new PitchView($('fatigueMap'), { x0: 0, x1: L, m: 1.5 }); fatigueV.layout($('fatigueMap').parentElement.clientWidth - 28);
       channelsV = new PitchView($('channels'), { x0: 0, x1: L, m: 1.5 }); channelsV.layout($('channels').parentElement.clientWidth - 28);
+      spV = new PitchView($('spMap'), { x0: 0, x1: L, m: 1.5 }); spV.layout($('spCard').clientWidth - 28);
+      duelV = new PitchView($('duelMap'), { x0: 0, x1: 62, m: 1.5 }); duelV.layout($('duelCard').clientWidth - 28);
     }
     heatV = new PitchView($('heat'), { portrait: narrow(), x0: 0, x1: L, m: 1.5 });
     heatV.layout(Math.min(narrow() ? 300 : 300, $('pdetail').clientWidth || 300));
@@ -434,7 +443,7 @@
     if (ev) {
       const [fx, fy] = tf(ev.free[0], ev.free[1]), r = Math.min(ev.free[2], 14);
       v.path(v.arcPts(fx, fy, r)); g.save(); g.setLineDash([6, 5]); g.strokeStyle = '#fff'; g.lineWidth = 1.5; g.stroke(); g.restore();
-      v.label(`ruang ${Math.round(ev.free[2])} m`, fx, fy, 0, { size: 11 });
+      v.label(`space ${Math.round(ev.free[2])} m`, fx, fy, 0, { size: 11 });
     }
     // trail of the selected player (last 5 s)
     if (S.sel) {
@@ -521,13 +530,13 @@
     let runner = null; if (best) for (const p of attackers) { const d = Math.hypot(p.x - best.x, p.y - best.y); if (!runner || d < runner.d) runner = { p, d }; }
     const fv = free.map((c) => c[2]), fmin = Math.min(...fv), fmax = Math.max(...fv);
     if (draw) drawAdvice(advA, free.map(([x, y, v]) => [x, y, (v - fmin) / Math.max(1e-6, fmax - fmin) * 15]), best, '#A78BFA', st, (v) => {
-      if (oppLine) { v.path([[oppLine, 0], [oppLine, W]]); v.ctx.save(); v.ctx.setLineDash([6, 6]); v.ctx.strokeStyle = 'rgba(255,255,255,.7)'; v.ctx.lineWidth = 1.5; v.ctx.stroke(); v.ctx.restore(); v.label('garis lawan', oppLine, 3, 0, { size: 10 }); }
+      if (oppLine) { v.path([[oppLine, 0], [oppLine, W]]); v.ctx.save(); v.ctx.setLineDash([6, 6]); v.ctx.strokeStyle = 'rgba(255,255,255,.7)'; v.ctx.lineWidth = 1.5; v.ctx.stroke(); v.ctx.restore(); v.label('their line', oppLine, 3, 0, { size: 10 }); }
       if (runner && best) v.arrow(runner.p.x, runner.p.y, best.x, best.y, '#fff', 2.5);
     });
     const atk = $('advAtk').querySelector('.adv-text');
-    atk.querySelector('b').textContent = best ? `Serang lewat ${lane(best.y)}` : 'Menunggu data';
-    atk.querySelector('span').textContent = best ? `Ruang ${Math.round(best.v)} m dari lawan terdekat` + (runner ? ` · ${nameOf(runner.p.role)} masuk ke zona` : '') +
-      (oppLine ? ` · garis lawan ${Math.round(L - oppLine)} m dari gawangnya` : '') : '';
+    atk.querySelector('b').textContent = best ? `Attack down the ${lane(best.y)}` : 'Waiting for data';
+    atk.querySelector('span').textContent = best ? `${Math.round(best.v)} m from the nearest opponent` + (runner ? ` · ${nameOf(runner.p.role)} runs into it` : '') +
+      (oppLine ? ` · their line ${Math.round(L - oppLine)} m from their goal` : '') : '';
     // ---------- defence: where the opponent is and we are not
     const danger = []; let worst = null;
     for (let x = 0; x < 55; x += cell) for (let y = 0; y < W; y += cell) {
@@ -548,16 +557,16 @@
     const ref = (meta.shape_ref['H_half' + meta.half] || {}).line_height_m;
     const dropTo = tiredCB.length && ref && ourLine && ourLine > ref - 2 ? Math.min(ourLine - 4, ref) : null;
     if (draw) drawAdvice(advD, danger.map(([x, y, v]) => [x, y, v / dmax * 15]), worst, '#F87171', st, (v) => {
-      if (ourLine) { v.path([[ourLine, 0], [ourLine, W]]); v.ctx.save(); v.ctx.setLineDash([6, 6]); v.ctx.strokeStyle = 'rgba(255,255,255,.7)'; v.ctx.lineWidth = 1.5; v.ctx.stroke(); v.ctx.restore(); v.label('garis kita', ourLine, 3, 0, { size: 10 }); }
+      if (ourLine) { v.path([[ourLine, 0], [ourLine, W]]); v.ctx.save(); v.ctx.setLineDash([6, 6]); v.ctx.strokeStyle = 'rgba(255,255,255,.7)'; v.ctx.lineWidth = 1.5; v.ctx.stroke(); v.ctx.restore(); v.label('our line', ourLine, 3, 0, { size: 10 }); }
       if (dropTo) { v.path([[dropTo, 0], [dropTo, W]]); v.ctx.save(); v.ctx.setLineDash([2, 5]); v.ctx.strokeStyle = COL.shadow; v.ctx.lineWidth = 2; v.ctx.stroke(); v.ctx.restore(); v.arrow(ourLine, W - 6, dropTo + 0.5, W - 6, COL.shadow, 2); }
       if (mover && worst && mover.d > 4) { const k = (mover.d - 3) / mover.d; v.arrow(mover.p.x, mover.p.y, mover.p.x + (worst.x - mover.p.x) * k, mover.p.y + (worst.y - mover.p.y) * k, '#fff', 2.5); }
     });
     S.adv = { atkLane: best ? lane(best.y) : null, atkFree: best ? best.v : null, runner: runner ? runner.p.role : null,
               defLane: worst ? lane(worst.y) : null, mover: mover ? mover.p.role : null, dropTo, ourLine, tiredCB };
     const def = $('advDef').querySelector('.adv-text');
-    def.querySelector('b').textContent = worst ? `Tutup sisi ${lane(worst.y)}` : 'Menunggu data';
-    def.querySelector('span').textContent = (mover ? `${nameOf(mover.p.role)} geser ${Math.max(0, Math.round(mover.d - 3))} m` : '') +
-      (dropTo ? ` · turunkan garis ${Math.round(ourLine - dropTo)} m (${tiredCB.join(' + ')} lelah)` : ourLine ? ` · garis kita ${Math.round(ourLine)} m` : '');
+    def.querySelector('b').textContent = worst ? `Close the ${lane(worst.y)}` : 'Waiting for data';
+    def.querySelector('span').textContent = (mover ? `${nameOf(mover.p.role)} shifts ${Math.max(0, Math.round(mover.d - 3))} m` : '') +
+      (dropTo ? ` · drop the line ${Math.round(ourLine - dropTo)} m (${tiredCB.join(' + ')} tiring)` : ourLine ? ` · our line ${Math.round(ourLine)} m` : '');
   }
   function drawAdvice(v, cells, best, color, st, extra) {
     const g = v.ctx; v.begin();
@@ -568,9 +577,8 @@
   }
 
   // ================================================================== side panels
-  function fatigueMap(f) {
-    if (narrow()) return;
-    const v = fatigueV, g = v.ctx; v.begin();
+  function fatigueMap(f, v = fatigueV, noteEl = $('fatigueNote')) {
+    if (!v) return; const g = v.ctx; v.begin();
     const fat = latestStamina(f); let red = 0;
     for (const [role, [depth, width]] of Object.entries(meta.role_means.H)) {
       const x = 52 + depth * 2.2, y = Math.max(4, Math.min(W - 4, W / 2 + (width - W / 2) * 1.5)), s = fat['H:' + role], lvl = s && s.half === meta.half ? s.level : 'no data';
@@ -582,7 +590,7 @@
       g.fillText(s && s.risk != null && s.half === meta.half ? String(s.risk) : '–', a, b + 0.5);
       v.label(nameOf(role), x, y, r + 9, { size: 9.5 });
     }
-    $('fatigueNote').textContent = red ? `${red} posisi merah` : 'blok 5 menit terakhir';
+    if (noteEl) noteEl.textContent = red ? `${red} positions in the red` : 'last 5-min block';
   }
 
   function feedThumb(canvas, frame, ev) {
@@ -593,18 +601,19 @@
     if (ev.kind === 'fatigue' && ev.team === 'H') { const m = meta.role_means.H[ev.label]; if (m) { const [a, b] = v.S(52 + m[0] * 2.2, W / 2 + (m[1] - W / 2) * 1.5); g.beginPath(); g.arc(a, b, 6, 0, 7); g.strokeStyle = COL.bad; g.lineWidth = 2; g.stroke(); } }
     if (ev.free) { const [fx, fy] = tf(ev.free[0], ev.free[1]); const [a, b] = v.S(fx, fy); g.beginPath(); g.arc(a, b, 7, 0, 7); g.strokeStyle = '#fff'; g.setLineDash([2, 2]); g.lineWidth = 1.2; g.stroke(); g.setLineDash([]); }
   }
-  const ZONE = { 'defensive third': 'sepertiga sendiri', 'middle third': 'tengah', 'final third': 'sepertiga akhir' };
+  const ZONE = { 'defensive third': 'our third', 'middle third': 'midfield', 'final third': 'the final third' };
   function eventView(e) {
     const opp = (lineup.oppName || meta.teams.A).split(' ')[0];
+    if (e.kind === 'goal') { const sc = score(e.frame); return { title: `GOAL ${e.team === 'H' ? meta.teams.H : opp} · ${sc.H}–${sc.A}`, dot: e.team === 'H' ? lineup.kitH : lineup.kitA }; }
     if (e.kind === 'fatigue') return e.team === 'H'
-      ? { title: `${nameOf(e.label)} mulai lelah · ${e.risk}`, dot: COL.bad }
-      : { title: `${opp}: ${e.label} melemah · ${e.risk}`, dot: COL.ok };
+      ? { title: `${nameOf(e.label)} tiring · ${e.risk}`, dot: COL.bad }
+      : { title: `${opp}: ${e.label} fading · ${e.risk}`, dot: COL.ok };
     if (e.kind === 'shape') {
       const m = e.messages[0], deep = m.match(/(\d+) m deeper/), loose = m.match(/(\d+)% less compact/);
-      const what = deep ? `garis turun ${deep[1]} m` : loose ? `blok renggang ${loose[1]}%` : m;
-      return e.team === 'H' ? { title: `Kita: ${what}`, dot: COL.warn } : { title: `${opp}: ${what}`, dot: COL.shadow };
+      const what = deep ? `line ${deep[1]} m deeper` : loose ? `block ${loose[1]}% looser` : m;
+      return e.team === 'H' ? { title: `Us: ${what}`, dot: COL.warn } : { title: `${opp}: ${what}`, dot: COL.shadow };
     }
-    return e.team === 'H' ? { title: `Rebut bola di ${ZONE[e.zone]}`, dot: COL.shadow } : { title: `Serangan balik ${opp}`, dot: COL.bad };
+    return e.team === 'H' ? { title: `Ball won in ${ZONE[e.zone]}`, dot: COL.shadow } : { title: `${opp} counter-attack`, dot: COL.bad };
   }
   function feed(f) {
     if (narrow()) return;
@@ -612,7 +621,7 @@
     const k = evs.map((e) => e.frame + e.kind + (e.label || '')).join('|');
     if (k === S.feedKey) return; S.feedKey = k;
     $('feedCount').textContent = all.length ? String(all.length) : '';
-    if (!evs.length) { $('feed').innerHTML = '<p class="empty">Insight muncul saat data cukup.</p>'; return; }
+    if (!evs.length) { $('feed').innerHTML = '<p class="empty">Insights appear once there is enough data.</p>'; return; }
     $('feed').innerHTML = evs.map((e) => {
       const id = e.frame + e.kind + (e.label || ''), fresh = !S.seen.has(id); S.seen.add(id);
       const vw = eventView(e);
@@ -643,10 +652,10 @@
     const line = median(shp.map((r) => r[0])), ref = (meta.shape_ref.H_half1 || {}).line_height_m;
     const cell = (k, v, d, warn) => `<div class="stat"><span class="k">${k}</span><span class="v${warn ? ' warn' : ''}">${v}<span class="d">${d || ''}</span></span></div>`;
     $('stats').innerHTML = [
-      cell('Pressing', now ? fmt1(now.pr) : '–', before ? `b1 ${fmt1(before.pr)}` : '', before && now && now.pr < before.pr),
-      cell('Rebut ≤5 dtk', now ? Math.round(now.reg * 100) + '%' : '–', before ? `b1 ${Math.round(before.reg * 100)}%` : '', before && now && now.reg < before.reg),
-      cell('Garis', line != null ? Math.round(line) + ' m' : '–', ref ? `b1 ${Math.round(ref)}` : '', ref && line != null && line - ref > 3),
-      cell('Keluar bentuk', S.outOfShape != null ? `${S.outOfShape}/10` : '–', 'Shadow Team', S.outOfShape >= 3),
+      cell('Pressing', now ? fmt1(now.pr) : '–', before ? `H1 ${fmt1(before.pr)}` : '', before && now && now.pr < before.pr),
+      cell('Regain ≤5 s', now ? Math.round(now.reg * 100) + '%' : '–', before ? `H1 ${Math.round(before.reg * 100)}%` : '', before && now && now.reg < before.reg),
+      cell('Line height', line != null ? Math.round(line) + ' m' : '–', ref ? `H1 ${Math.round(ref)}` : '', ref && line != null && line - ref > 3),
+      cell('Out of shape', S.outOfShape != null ? `${S.outOfShape}/10` : '–', 'Shadow Team', S.outOfShape >= 3),
     ].join('');
   }
 
@@ -666,9 +675,9 @@
         ${avatar(pl, S.team, r.role)}
         <span class="who"><b>${esc(pl ? pl.name : r.role)}</b><span>${r.role}${pl && pl.slot && pl.slot !== r.role ? ' · ' + pl.slot : ''}</span></span>
         <span class="dist">${fmt1(r.v[0] / 1000)} km<i style="--w:${(r.v[0] / max * 100).toFixed(1)}%"></i></span>
-        <span class="spd${kmh > 19.8 ? ' hot' : ''}">${kmh == null ? '–' : Math.round(kmh)}<small> km/j</small></span>
+        <span class="spd${kmh > 19.8 ? ' hot' : ''}">${kmh == null ? '–' : Math.round(kmh)}<small> km/h</small></span>
         <span class="spr">${r.v[2]}×</span>
-        <span class="risk" style="background:${LEVEL[lvl]}" title="Risiko lelah ${s && s.risk != null ? s.risk : '–'}"></span></button>`;
+        <span class="risk" style="background:${LEVEL[lvl]}" title="Fatigue risk ${s && s.risk != null ? s.risk : '–'}"></span></button>`;
     }).join('');
     $('plist').querySelectorAll('.prow').forEach((el) => el.onclick = () => { S.sel = S.sel === el.dataset.k ? null : el.dataset.k; panels(true); });
     detail(rows, fat, si, force);
@@ -678,8 +687,8 @@
     const role = k.split(':')[1], team = k[0], arr = C.seconds.movement[k]; if (!arr) return;
     const v = arr[si], pl = team === 'H' ? roleToPlayer[role] : null, s = fat[k];
     $('pdStats').innerHTML = `<div class="pd-name"><b>${esc(pl ? pl.name : role)}</b><span>${role} · ${team === 'H' ? meta.teams.H : (lineup.oppName || meta.teams.A)}</span></div>
-      <div><b>${fmt1(v[0] / 1000)}</b><span>km sejak kick-off</span></div><div><b>${fmt1(v[3])}</b><span>km/j tercepat</span></div>
-      <div><b>${v[2]}</b><span>sprint</span></div><div><b style="color:${s ? LEVEL[s.level] : 'inherit'}">${s && s.risk != null ? s.risk : '–'}</b><span>risiko lelah</span></div>`;
+      <div><b>${fmt1(v[0] / 1000)}</b><span>km since kick-off</span></div><div><b>${fmt1(v[3])}</b><span>top km/h</span></div>
+      <div><b>${v[2]}</b><span>sprints</span></div><div><b style="color:${s ? LEVEL[s.level] : 'inherit'}">${s && s.risk != null ? s.risk : '–'}</b><span>fatigue risk</span></div>`;
     const bucket = k + Math.floor(S.t / 3);
     if (bucket === heatCache && !force) return; heatCache = bucket;
     // heatmap of this position in the clip so far
@@ -698,8 +707,8 @@
   // ================================================================== what the bench needs to know
   // Momentum: per match minute, share of live time the ball spends in the opponent's final third
   // (up, our colour) and in ours (down, theirs). Territory says more than possession alone.
-  function momentumChart(f) {
-    const c = $('momentum'), w = c.clientWidth, h = 46, d = window.devicePixelRatio || 1;
+  function momentumChart(f, c = $('momentum'), h = 46) {
+    const w = c.clientWidth, d = window.devicePixelRatio || 1;
     if (!w) return;
     c.width = w * d; c.height = h * d; const g = c.getContext('2d'); g.setTransform(d, 0, 0, d, 0, 0); g.clearRect(0, 0, w, h);
     const h1 = C.momentum.filter((m) => m[0] === 1).length, total = h1 + 50, bw = w / total;
@@ -716,7 +725,7 @@
   }
 
   const laneIdx = (y) => (y < W / 3 ? 0 : y < 2 * W / 3 ? 1 : 2);
-  const LANES = ['kiri', 'tengah', 'kanan'];
+  const LANES = ['left', 'middle', 'right'];
   function channelCounts(f, minutes) {
     const out = { H: [0, 0, 0], A: [0, 0, 0] };
     for (const [fr, team, y] of C.entries) if (fr <= f && fr > f - minutes * 60 * meta.fps) out[team][laneIdx(y)]++;
@@ -737,8 +746,8 @@
     }
     return best;
   }
-  function channels(f, st) {
-    const v = channelsV; if (!v) return; const g = v.ctx; v.begin();
+  function channels(f, st, v = channelsV, note = $('watch')) {
+    if (!v) return; const g = v.ctx; v.begin();
     const cnt = channelCounts(f, 15), ys = [W / 6, W / 2, 5 * W / 6];
     const draw = (team, x0, x1, color) => cnt[team].forEach((n, k) => {
       if (!n) { v.path([[x0, ys[k]], [x1, ys[k]]]); g.save(); g.setLineDash([2, 5]); g.strokeStyle = 'rgba(255,255,255,.25)'; g.lineWidth = 1; g.stroke(); g.restore(); return; }
@@ -748,8 +757,8 @@
     draw('H', 58, 92, lineup.kitH); draw('A', 47, 13, lineup.kitA);
     const ko = keyOpponent(st, Math.max(0, Math.floor(S.t)));
     const opp = (lineup.oppName || meta.teams.A).split(' ')[0];
-    $('watch').innerHTML = `Panah = masuk sepertiga akhir (kanan: kita, kiri: ${esc(opp)}).` +
-      (ko && ko.score > 30 ? ` Awasi <b>${ko.role} ${esc(opp)}</b>: ${Math.round(ko.frac * 100)}% waktu dekat gawang kita, ${ko.spr} sprint 10 menit terakhir.` : '');
+    note.innerHTML = `Arrows = entries into the final third (right: us, left: ${esc(opp)}).` +
+      (ko && ko.score > 30 ? ` Watch <b>${esc(opp)} ${ko.role}</b>: ${Math.round(ko.frac * 100)}% of his time near our goal, ${ko.spr} sprints in the last 10 min.` : '');
     S.keyOpp = ko;
   }
 
@@ -759,32 +768,246 @@
     const items = [], opp = (lineup.oppName || meta.teams.A).split(' ')[0];
     const fat = latestStamina(f);
     const red = Object.values(fat).filter((r) => r.team === 'H' && r.half === meta.half && r.level === 'red').sort((a, b) => b.risk - a.risk);
-    if (red.length) items.push({ score: 90 + red[0].risk / 10, color: COL.bad, title: `Siapkan pergantian: ${nameOf(red[0].label)}`,
-      sub: `Risiko lelah ${red[0].risk} · lari cepat ${Math.round(red[0].hsr * 100)}% dari awal` + (red.length > 1 ? ` · juga ${red.slice(1).map((r) => nameOf(r.label)).join(', ')}` : '') });
+    if (red.length) items.push({ score: 90 + red[0].risk / 10, color: COL.bad, title: `Prepare a substitution: ${nameOf(red[0].label)}`,
+      sub: `Fatigue risk ${red[0].risk} · high-speed running at ${Math.round(red[0].hsr * 100)}% of his start` + (red.length > 1 ? ` · also ${red.slice(1).map((r) => nameOf(r.label)).join(', ')}` : '') });
     const dangerA = C.transitions.filter((t) => t.won_by === 'A' && t.dangerous && t.frame <= f && t.frame > f - 10 * 60 * meta.fps).length;
-    if (dangerA >= 2) items.push({ score: 80 + dangerA, color: COL.bad, title: `Waspada serangan balik ${opp}`, sub: `${dangerA} transisi berbahaya dalam 10 menit` });
+    if (dangerA >= 2) items.push({ score: 80 + dangerA, color: COL.bad, title: `Beware the ${opp} counter`, sub: `${dangerA} dangerous transitions in 10 min` });
     const cnt = channelCounts(f, 15).A, tot = cnt.reduce((a, b) => a + b, 0), top = cnt.indexOf(Math.max(...cnt));
     const second = [...cnt].sort((a, b) => b - a)[1];
-    if (tot >= 3 && cnt[top] / tot >= 0.5 && cnt[top] > second) items.push({ score: 70 + cnt[top], color: COL.warn, title: `${opp} masuk lewat sisi ${LANES[top]} kita`, sub: `${cnt[top]} dari ${tot} serangan 15 menit terakhir` });
+    if (tot >= 3 && cnt[top] / tot >= 0.5 && cnt[top] > second) items.push({ score: 70 + cnt[top], color: COL.warn, title: `${opp} getting through our ${LANES[top]}`, sub: `${cnt[top]} of ${tot} attacks in the last 15 min` });
     const h1n = C.momentum.filter((m) => m[0] === 1).length;
     const nowI = Math.min(C.momentum.length - 1, (meta.half === 2 ? h1n : 0) + Math.floor((f - meta.half_start) / meta.fps / 60));
     const recent = C.momentum.slice(Math.max(0, nowI - 4), nowI + 1);
     if (recent.length) {
       const att = recent.reduce((s, m) => s + m[2], 0) / recent.length, def = recent.reduce((s, m) => s + m[3], 0) / recent.length;
-      if (def > att + 0.1) items.push({ score: 62, color: COL.warn, title: `${opp} sedang menekan`, sub: `Bola ${Math.round(def * 100)}% di sepertiga kita, 5 menit terakhir` });
-      else if (att > def + 0.15) items.push({ score: 35, color: COL.ok, title: 'Momentum milik kita', sub: `Bola ${Math.round(att * 100)}% di sepertiga ${opp}, 5 menit terakhir` });
+      if (def > att + 0.1) items.push({ score: 62, color: COL.warn, title: `${opp} are pressing`, sub: `Ball ${Math.round(def * 100)}% of the time in our third, last 5 min` });
+      else if (att > def + 0.15) items.push({ score: 35, color: COL.ok, title: 'Momentum is ours', sub: `Ball ${Math.round(att * 100)}% of the time in the ${opp} third, last 5 min` });
     }
     if (S.outOfShape != null) { oosHist.push(S.outOfShape); if (oosHist.length > 20) oosHist.shift(); }
     const oos = oosHist.length ? oosHist.reduce((a, b) => a + b, 0) / oosHist.length : 0;
-    if (oos >= 2.5) items.push({ score: 66, color: COL.warn, title: 'Bentuk bertahan pecah', sub: `Rata-rata ${Math.round(oos)} pemain jauh dari Shadow Team saat ${opp} menguasai bola` });
-    if (S.adv && S.adv.dropTo) items.push({ score: 64, color: COL.shadow, title: `Turunkan garis ${Math.round(S.adv.ourLine - S.adv.dropTo)} m`, sub: `${S.adv.tiredCB.join(' + ')} lelah, ruang di belakang garis` });
-    if (S.keyOpp && S.keyOpp.score > 45) items.push({ score: 55, color: COL.warn, title: `Awasi ${S.keyOpp.role} ${opp}`, sub: `${Math.round(S.keyOpp.frac * 100)}% waktu dekat gawang kita · ${S.keyOpp.spr} sprint` });
-    if (S.adv && S.adv.atkLane) items.push({ score: 50, color: COL.shadow, title: `Peluang: serang lewat ${S.adv.atkLane}`, sub: `Ruang ${Math.round(S.adv.atkFree)} m` + (S.adv.runner ? ` · ${nameOf(S.adv.runner)} lari ke zona` : '') });
+    if (oos >= 2.5) items.push({ score: 66, color: COL.warn, title: 'Defensive shape is breaking', sub: `On average ${Math.round(oos)} players far from the Shadow Team while ${opp} have the ball` });
+    if (S.adv && S.adv.dropTo) items.push({ score: 64, color: COL.shadow, title: `Drop the line ${Math.round(S.adv.ourLine - S.adv.dropTo)} m`, sub: `${S.adv.tiredCB.join(' + ')} tiring, space behind the line` });
+    if (S.keyOpp && S.keyOpp.score > 45) items.push({ score: 55, color: COL.warn, title: `Watch the ${opp} ${S.keyOpp.role}`, sub: `${Math.round(S.keyOpp.frac * 100)}% of his time near our goal · ${S.keyOpp.spr} sprints` });
+    if (S.adv && S.adv.atkLane) items.push({ score: 50, color: COL.shadow, title: `Chance: attack down the ${S.adv.atkLane}`, sub: `${Math.round(S.adv.atkFree)} m of space` + (S.adv.runner ? ` · ${nameOf(S.adv.runner)} runs into it` : '') });
+    const sp = C.setpieces.filter((r) => r[1] === 'A' && r[0] <= f && r[0] > f - 15 * 60 * meta.fps && ['corner', 'freekick_final'].includes(r[2]));
+    if (sp.length >= 3) items.push({ score: 58 + sp.length, color: COL.warn, title: `${opp} keep winning set pieces near our box`, sub: `${sp.length} corners / free kicks in the last 15 min: set the marking` });
+    const bad = (S.duels || []).filter((d) => d.danger >= 0.35).sort((a, b) => b.danger - a.danger)[0];
+    if (bad) items.push({ score: 68 + bad.danger * 10, color: COL.bad, title: `Losing duel: ${nameOf(bad.def)} vs ${opp} ${bad.att}`,
+      sub: `Opponent goal-side of him ${Math.round(bad.behind * 100)}% of the time` + (bad.races >= 5 ? ` · races lost ${bad.lost}/${bad.races}` : '') });
     const top3 = items.sort((a, b) => b.score - a.score).slice(0, 3);
+    S.top3 = top3;
     const html = top3.length ? top3.map((it) => `<div class="pi"><i style="background:${it.color}"></i><div><b>${esc(it.title)}</b><span>${esc(it.sub)}</span></div></div>`).join('')
-      : '<p class="empty">Belum ada yang mendesak.</p>';
+      : '<p class="empty">Nothing urgent yet.</p>';
     if ($('prio').innerHTML !== html) $('prio').innerHTML = html;
     if ($('prioPhone').innerHTML !== html) $('prioPhone').innerHTML = html;
+  }
+
+  // ================================================================== set pieces
+  const SP_NAMES = { corner: 'Corners', freekick_final: 'Free kicks, final third', freekick: 'Other free kicks', throw: 'Throw-ins', goalkick: 'Goal kicks' };
+  function setPieceSummary(f) {
+    const rows = C.setpieces.filter((r) => r[0] <= f), out = { H: {}, A: {}, keepH: [0, 0], keepA: [0, 0], boxH: 0, boxA: 0 };
+    for (const [, team, kind, , , kept, box] of rows) {
+      out[team][kind] = (out[team][kind] || 0) + 1;
+      if (kind === 'corner' || kind === 'freekick_final') { out['keep' + team][1]++; if (kept) out['keep' + team][0]++; if (box) out['box' + team]++; }
+    }
+    return { rows, out };
+  }
+  function setPieces(f, v = spV, el = $('spTable')) {
+    if (!v) return; const g = v.ctx; v.begin();
+    const { rows, out } = setPieceSummary(f);
+    for (const [, team, kind, x, y, kept, box] of rows) {
+      if (kind === 'goalkick' || kind === 'kickoff') continue;
+      const [a, b] = v.S(x, y), col = team === 'H' ? lineup.kitH : lineup.kitA, r = kind === 'throw' ? 3 : 5.5;
+      g.beginPath();
+      if (kind === 'corner') { g.moveTo(a, b - 7); g.lineTo(a + 6.5, b + 5); g.lineTo(a - 6.5, b + 5); g.closePath(); }
+      else if (kind === 'throw') g.rect(a - r, b - r, 2 * r, 2 * r);
+      else g.arc(a, b, r, 0, 7);
+      g.fillStyle = hexA(col, kind === 'freekick' ? 0.55 : 0.95); g.fill();
+      if (box) { g.lineWidth = 2; g.strokeStyle = '#fff'; g.stroke(); }
+    }
+    const opp = (lineup.oppName || meta.teams.A).split(' ')[0];
+    const line = (k) => `<tr><td>${SP_NAMES[k]}</td><td>${out.H[k] || 0}</td><td>${out.A[k] || 0}</td></tr>`;
+    const pct = (k) => (k[1] ? Math.round(k[0] / k[1] * 100) + '%' : '–');
+    el.innerHTML = `<table class="mini"><thead><tr><th></th><th>${esc(meta.teams.H)}</th><th>${esc(opp)}</th></tr></thead><tbody>
+      ${['corner', 'freekick_final', 'freekick', 'throw'].map(line).join('')}
+      <tr><td>Ball kept after 10 s (corners + final-third FKs)</td><td>${pct(out.keepH)}</td><td>${pct(out.keepA)}</td></tr>
+      <tr><td>Ball reached the box</td><td>${out.boxH}</td><td>${out.boxA}</td></tr></tbody></table>`;
+    return out;
+  }
+
+  // ================================================================== 1v1 duels (last 10 min)
+  // For each of our defenders: the opponent he is closest to most often in our half; how often
+  // that opponent is goal-side of him, and who wins the races when both run above 19.8 km/h.
+  const DEF_ROLES = ['LB', 'LCB', 'CB', 'RCB', 'RB', 'LWB', 'RWB'];
+  function computeDuels(st) {
+    const pairs = {};
+    for (let i = Math.max(0, st.idx - 3000); i <= st.idx; i += 5) {
+      const fr = C.frames[i]; if (!fr[2] || fr[1] === 'D') continue;
+      const [bx] = tf(fr[2][0], fr[2][1]); if (bx > 60) continue;
+      const ps = framePlayers(i), opps = ps.filter((p) => p.team === 'A' && p.role !== 'GK');
+      for (const d of ps) {
+        if (d.team !== 'H' || !DEF_ROLES.includes(d.role)) continue;
+        let best = null; for (const o of opps) { const dist = Math.hypot(o.x - d.x, o.y - d.y); if (dist < 15 && (!best || dist < best.dist)) best = { o, dist }; }
+        if (!best) continue;
+        const k = d.role + '|' + best.o.role, s = pairs[k] || (pairs[k] = { def: d.role, att: best.o.role, n: 0, dist: 0, behind: 0, races: 0, lost: 0, dx: 0, dy: 0, ax: 0, ay: 0 });
+        s.n++; s.dist += best.dist; s.dx += d.x; s.dy += d.y; s.ax += best.o.x; s.ay += best.o.y;
+        if (best.o.x < d.x - 1) s.behind++;
+        if (d.v > 5.5 && best.o.v > 5.5 && best.dist < 10) { s.races++; if (best.o.v > d.v + 0.5) s.lost++; }
+      }
+    }
+    const byDef = {};
+    for (const s of Object.values(pairs)) if (!byDef[s.def] || s.n > byDef[s.def].n) byDef[s.def] = s;
+    return Object.values(byDef).filter((s) => s.n >= 20).map((s) => {
+      const behind = s.behind / s.n, lostR = s.races >= 5 ? s.lost / s.races : 0;
+      return { def: s.def, att: s.att, mins: s.n / 60, dist: s.dist / s.n, behind, races: s.races, lost: s.lost,
+               danger: 0.6 * behind + 0.4 * lostR, d: [s.dx / s.n, s.dy / s.n], a: [s.ax / s.n, s.ay / s.n] };
+    });
+  }
+  let duelCache = -1;
+  function duels(st, v = duelV, el = $('duelList'), force) {
+    if (!v) return;
+    const bucket = Math.floor(S.t / 5);
+    if (bucket !== duelCache || force) { S.duels = computeDuels(st); duelCache = bucket; }
+    const g = v.ctx; v.begin();
+    const color = (dg) => (dg >= 0.35 ? COL.bad : dg >= 0.2 ? COL.warn : COL.ok);
+    for (const dl of S.duels) {
+      v.path([dl.d, dl.a]); g.strokeStyle = color(dl.danger); g.lineWidth = 3; g.lineCap = 'round'; g.stroke();
+      for (const [[x, y], col] of [[dl.d, lineup.kitH], [dl.a, lineup.kitA]]) { const [a, b] = v.S(x, y); g.beginPath(); g.arc(a, b, 7, 0, 7); g.fillStyle = col; g.fill(); g.strokeStyle = '#fff'; g.lineWidth = 1.5; g.stroke(); }
+      v.label(nameOf(dl.def), dl.d[0], dl.d[1], 15, { size: 10 });
+      v.label(dl.att, dl.a[0], dl.a[1], -15, { size: 10, color: '#FFE1D8' });
+    }
+    const opp = (lineup.oppName || meta.teams.A).split(' ')[0];
+    el.innerHTML = S.duels.length ? S.duels.sort((a, b) => b.danger - a.danger).map((dl) => `<div class="duel">
+        <i style="background:${color(dl.danger)}"></i><b>${esc(nameOf(dl.def))}</b><span>vs ${dl.att} ${esc(opp)}</span>
+        <em>goal-side ${Math.round(dl.behind * 100)}%${dl.races >= 5 ? ` · races lost ${dl.lost}/${dl.races}` : ''}</em></div>`).join('')
+      : '<p class="empty">Not enough duels in our half yet.</p>';
+  }
+
+  // ================================================================== one-page report
+  function reportStats(f) {
+    const h1n = C.momentum.filter((m) => m[0] === 1).length, nowI = Math.min(C.momentum.length - 1, (meta.half === 2 ? h1n : 0) + Math.floor((f - meta.half_start) / meta.fps / 60));
+    const mm = C.momentum.slice(0, nowI + 1).filter((m) => m[1] != null);
+    const avg = (k) => mm.reduce((s, m) => s + m[k], 0) / Math.max(1, mm.length);
+    const tr = C.transitions.filter((t) => t.frame <= f);
+    const lost = tr.filter((t) => t.won_by === 'A');
+    const shp = C.seconds.shape.H.filter((r, i) => i <= Math.floor(S.t) && r[4] === 'o');
+    const ent = { H: 0, A: 0 }; for (const [fr, team] of C.entries) if (fr <= f) ent[team]++;
+    return {
+      poss: avg(1), att: avg(2), def: avg(3),
+      regain: lost.length ? lost.filter((t) => t.regained).length / lost.length : null,
+      press: lost.length ? lost.reduce((s, t) => s + t.pressers, 0) / lost.length : null,
+      dangerH: tr.filter((t) => t.won_by === 'H' && t.dangerous).length, dangerA: tr.filter((t) => t.won_by === 'A' && t.dangerous).length,
+      line: median(shp.map((r) => r[0])), lineRef: (meta.shape_ref.H_half1 || {}).line_height_m, ent,
+    };
+  }
+  // ================================================================== match statistics
+  const halfOf = (fr) => (fr <= half1End ? 1 : 2);
+  function score(f) {
+    const s = { H: 0, A: 0 };
+    for (const [fr, code, team] of C.match_events) if (code === 'GOALS' && fr <= f) s[team]++;
+    return s;
+  }
+  function matchStats(f) {
+    const blank = () => ({ goals: 0, possT: 0, n: 0, chances: 0, counters: 0, danger: 0, entries: 0, box: 0, long: 0,
+      wins: 0, lost: 0, regained: 0, corner: 0, fk: 0, throw: 0, gk: 0, km: 0, sprints: 0 });
+    const S2 = { 1: { H: blank(), A: blank() }, 2: { H: blank(), A: blank() } };
+    for (let i = 0; i < C.runs.length - 1; i++) {
+      const [fr, l] = C.runs[i], nx = C.runs[i + 1][0];
+      if (l !== 'H' && l !== 'A') continue;
+      if (fr > f) break;
+      const s = S2[halfOf(fr)][l]; s.possT += Math.min(nx, f + 1) - fr; s.n++;
+    }
+    const code2 = { GOALS: 'goals', 'CREATING CHANCES': 'chances', 'ATTACKING TRANSITION': 'counters', 'BALL IN THE BOX': 'box', 'LONG BALL': 'long' };
+    for (const [fr, code, team] of C.match_events) if (fr <= f && code2[code]) S2[halfOf(fr)][team][code2[code]]++;
+    for (const t of C.transitions) if (t.frame <= f) {
+      const w = S2[t.half][t.won_by], l = S2[t.half][t.won_by === 'H' ? 'A' : 'H'];
+      w.wins++; if (t.dangerous) w.danger++; l.lost++; if (t.regained) l.regained++;
+    }
+    for (const [fr, team] of C.entries) if (fr <= f) S2[halfOf(fr)][team].entries++;
+    const spKey = { corner: 'corner', freekick: 'fk', freekick_final: 'fk', throw: 'throw', goalkick: 'gk' };
+    for (const [fr, team, kind] of C.setpieces) if (fr <= f && spKey[kind]) S2[halfOf(fr)][team][spKey[kind]]++;
+    for (const [team, h, minute, km, , spr] of C.team_running) if (blockEnd(h, minute) <= f) { S2[h][team].km += km; S2[h][team].sprints += spr; }
+    const T = { H: blank(), A: blank() };
+    for (const h of [1, 2]) for (const team of ['H', 'A']) for (const k in T[team]) T[team][k] += S2[h][team][k];
+    return { 1: S2[1], 2: S2[2], T };
+  }
+  const STAT_ROWS = [
+    ['Goals', (s) => s.goals],
+    ['Possession', (s, o) => (s.possT + o.possT ? Math.round(100 * s.possT / (s.possT + o.possT)) + '%' : '–')],
+    ['Possessions', (s) => s.n],
+    ['Average possession', (s) => (s.n ? Math.round(s.possT / s.n / meta.fps) + ' s' : '–')],
+    ['Chances created', (s) => s.chances],
+    ['Counter-attacks', (s) => s.counters],
+    ['Dangerous transitions', (s) => s.danger],
+    ['Final-third entries', (s) => s.entries],
+    ['Box entries', (s) => s.box],
+    ['Long balls', (s) => s.long],
+    ['Ball recoveries', (s) => s.wins],
+    ['Counter-press regains ≤5 s', (s) => (s.lost ? Math.round(100 * s.regained / s.lost) + '%' : '–')],
+    ['Corners', (s) => s.corner],
+    ['Free kicks', (s) => s.fk],
+    ['Throw-ins', (s) => s.throw],
+    ['Goal kicks', (s) => s.gk],
+    ['Team distance', (s) => (s.km ? fmt1(s.km) + ' km' : '–')],
+    ['Sprints', (s) => s.sprints || '–'],
+  ];
+  function statsTable(f) {
+    const m = matchStats(f), opp1 = (lineup.oppName || meta.teams.A).split(' ')[0], live = meta.half === 2;
+    const head = (t) => `<th>${esc(meta.teams.H)}</th><th>${esc(opp1)}</th>`;
+    const cell = (grp, fn, bold) => { const a = fn(grp.H, grp.A), b = fn(grp.A, grp.H); return `<td${bold ? ' class="b"' : ''}>${a}</td><td${bold ? ' class="b"' : ''}>${b}</td>`; };
+    return `<table class="mstats"><thead>
+      <tr><th></th><th colspan="2">1st half</th><th colspan="2">2nd half${live ? ` (to ${clockText(f)})` : ''}</th><th colspan="2">Total</th></tr>
+      <tr><th></th>${head()}${head()}${head()}</tr></thead><tbody>
+      ${STAT_ROWS.map(([name, fn]) => `<tr><td>${name}</td>${cell(m[1], fn)}${cell(m[2], fn)}${cell(m.T, fn, true)}</tr>`).join('')}
+      </tbody></table>`;
+  }
+
+  function openReport() {
+    S.playing = false;
+    const st = interp(S.t), f = videoFrame(S.t), si = Math.max(0, Math.floor(S.t));
+    panels(true);
+    const r = reportStats(f), opp = lineup.oppName || meta.teams.A, opp1 = opp.split(' ')[0];
+    const kpi = (k, v, d) => `<div class="rk"><span>${k}</span><b>${v}</b><em>${d || ''}</em></div>`;
+    const pct = (v) => (v == null ? '–' : Math.round(v * 100) + '%');
+    const top = (S.top3 || []).map((it) => `<li><i style="background:${it.color}"></i><b>${esc(it.title)}</b> <span>${esc(it.sub)}</span></li>`).join('');
+    const atk = $('advAtk').querySelector('.adv-text'), def = $('advDef').querySelector('.adv-text');
+    $('repBody').innerHTML = `
+      <header class="rh"><div><h1>${esc(meta.teams.H)} <span class="score">${score(f).H}–${score(f).A}</span> ${esc(opp)}</h1><p>Shadow Ball automatic report · up to ${clockText(f)} · ${lineup.formation} vs ${meta.formation.A}</p></div>
+        <div class="rmark"><span class="mark"></span>Shadow<b>Ball</b></div></header>
+      <section class="rblock"><h2>Match statistics</h2>${statsTable(f)}
+        <p class="rnote">Goals, chances, counter-attacks, box entries, long balls and set pieces: Metrica Smart Tagging (automatic, can be wrong). Possession, transitions, final-third entries, recoveries and running: the Shadow Ball pipeline, from tracking. Shots are not counted: the data has no shot events and the tactical camera often loses the ball in front of goal, so "chances created" is used instead. Distance counts completed 5-minute blocks and reads low whenever a player is not tracked.</p></section>
+      <section class="rkpis rk-hidden">
+        ${kpi('Minutes in possession', pct(r.poss), `${esc(opp1)} ${pct(r.poss == null ? null : 1 - r.poss)}`)}
+        ${kpi('Ball in their third', pct(r.att), `in ours ${pct(r.def)}`)}
+        ${kpi('Final-third entries', String(r.ent.H), `${esc(opp1)} ${r.ent.A}`)}
+        ${kpi('Regain ≤5 s', pct(r.regain), r.press ? `${fmt1(r.press)} players pressing` : '')}
+        ${kpi('Dangerous transitions', String(r.dangerH), `${esc(opp1)} ${r.dangerA}`)}
+        ${kpi('Defensive line height', r.line != null ? Math.round(r.line) + ' m' : '–', r.lineRef ? `1st half ${Math.round(r.lineRef)} m` : '')}
+      </section>
+      <section class="rblock"><h2>Momentum</h2><p class="rnote">Per minute: up = ball in the ${esc(opp1)} third, down = ball in our third.</p><canvas id="repMom"></canvas></section>
+      <div class="rpair">
+        <section class="rblock"><h2>Three things that matter now</h2><ul class="rtop">${top || '<li>Nothing urgent yet.</li>'}</ul></section>
+        <section class="rblock"><h2>For the next minutes</h2><ul class="rnext">
+          <li><b>Attack:</b> ${esc(atk.querySelector('b').textContent)}. ${esc(atk.querySelector('span').textContent)}</li>
+          <li><b>Defend:</b> ${esc(def.querySelector('b').textContent)}. ${esc(def.querySelector('span').textContent)}</li></ul></section>
+      </div>
+      <div class="pagebreak"></div>
+      <header class="rh small"><div><h1>Maps</h1><p>${esc(meta.teams.H)} ${score(f).H}–${score(f).A} ${esc(opp)} · up to ${clockText(f)}</p></div><div class="rmark"><span class="mark"></span>Shadow<b>Ball</b></div></header>
+      <div class="rgrid">
+        <section class="rblock"><h2>Attack channels · 15 min</h2><canvas id="repCh"></canvas><p class="rnote" id="repChNote"></p></section>
+        <section class="rblock"><h2>Set pieces</h2><canvas id="repSp"></canvas><div id="repSpT"></div></section>
+        <section class="rblock"><h2>Freshness</h2><canvas id="repFat"></canvas><p class="rnote">Number = fatigue risk 0–100 (last 5-minute block), against that position's first 15 minutes.</p></section>
+        <section class="rblock"><h2>1v1 duels · 10 min</h2><canvas id="repDuel"></canvas><div id="repDuelL"></div></section>
+      </div>
+      <footer class="rf">Positions are tactical roles from tracking (substitutions are not visible yet). Set pieces from Smart Tagging, placed where the ball was seen; duels are estimates from player positions. Licensed match data: this report is for the team only.</footer>`;
+    $('report').hidden = false; document.body.classList.add('report-open');
+    const wFull = $('repBody').clientWidth, wHalf = Math.floor((wFull - 20) / 2);
+    const mk = (id, o, w) => { const v = new PitchView($(id), o); v.layout(w); return v; };
+    momentumChart(f, $('repMom'), 60);
+    channels(f, st, mk('repCh', { x0: 0, x1: L, m: 1.5 }, wHalf), $('repChNote'));
+    setPieces(f, mk('repSp', { x0: 0, x1: L, m: 1.5 }, wHalf), $('repSpT'));
+    fatigueMap(f, mk('repFat', { x0: 0, x1: L, m: 1.5 }, wHalf), null);
+    duels(st, mk('repDuel', { x0: 0, x1: 62, m: 1.5 }, wHalf), $('repDuelL'), true);
   }
 
   // ================================================================== loop
@@ -792,7 +1015,7 @@
   function panels(force) {
     const st = interp(S.t), f = videoFrame(S.t), si = Math.max(0, Math.min(C.seconds.frames.length - 1, Math.floor(S.t)));
     squad(st, f, si, force); strip(f); advice(st);
-    if (!narrow()) { feed(f); fatigueMap(f); stats(f, si); momentumChart(f); channels(f, st); }
+    if (!narrow()) { feed(f); fatigueMap(f); stats(f, si); momentumChart(f); channels(f, st); setPieces(f); duels(st); }
     priorities(f, st, si);
   }
   function loop(now) {
@@ -804,8 +1027,10 @@
     $('scrub').value = S.t;
     $('playBtn').classList.toggle('on', S.playing);
     $('clock').textContent = clockText(st.frame);
+    const sc = score(st.frame), scTxt = `${meta.teams.H} ${sc.H}–${sc.A} ${(lineup.oppName || meta.teams.A)}`;
+    if ($('match').dataset.score !== scTxt) { $('match').dataset.score = scTxt; $('match').innerHTML = `<b>${esc(scTxt)}</b> · ${lineup.formation} vs ${meta.formation.A}`; }
     const pe = $('poss'), opp = (lineup.oppName || meta.teams.A).split(' ')[0];
-    pe.innerHTML = st.poss === 'D' ? '<i style="background:#6B7280"></i>Bola mati'
+    pe.innerHTML = st.poss === 'D' ? '<i style="background:#6B7280"></i>Dead ball'
       : `<i style="background:${st.poss === 'H' ? lineup.kitH : lineup.kitA}"></i>${st.poss === 'H' ? meta.teams.H : opp}`;
     const half = Math.floor(S.t * 2) / 2;
     if (half !== lastPanel) { lastPanel = half; panels(false); }

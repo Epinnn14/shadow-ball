@@ -72,7 +72,18 @@ a Copilot feed with a mini-pitch per event, and movement per player with a heatm
 "Perlu diketahui", the three things that matter now, ranked from all modules (fatigue, counter-attacks,
 the channel the opponent uses, pressure, broken shape, line height, a dangerous opponent, a chance);
 a momentum chart (minutes with the ball in each final third); and attack channels (final-third
-entries left/centre/right for both teams over 15 minutes). The phone also gets "Perlu diketahui". A phone on the same Wi-Fi or on the laptop's
+entries left/centre/right for both teams over 15 minutes). The phone also gets "Perlu diketahui". Two more cards: set pieces (every restart after a dead ball,
+classified by where it is taken: corner, free kick in the final third, other free kick, throw-in,
+goal kick; whether the team kept the ball 10 s later and reached the box) and 1v1 duels (for each of
+our defenders, the opponent he meets most in our half over 10 minutes: how often that opponent is
+goal-side of him and who wins the sprints). "Laporan" opens a two-page A4 report (print or save as
+PDF) for half-time or the team meeting: the score and the usual match statistics per half and in total
+(possession, number and length of possessions, chances created, counter-attacks, dangerous transitions,
+final-third and box entries, long balls, ball wins, counter-press regains, corners, free kicks,
+throw-ins, goal kicks, team distance and sprints), momentum, the three priorities and the advice, then
+the maps. Goals, chances, counter-attacks, box entries, long balls and set-piece types come from
+Metrica's Smart Tagging; the rest from our pipeline. Shots are not reported: the data has no shot
+events and the tactical camera often loses the ball in front of goal. A phone on the same Wi-Fi or on the laptop's
 hotspot opens the printed address and gets the pitch (upright) plus movement per position, and
 follows the laptop's clock. The clip is derived match data: it is served only from the laptop on
 the local network and never uploaded. No internet or CDN is needed.

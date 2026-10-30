@@ -12,7 +12,7 @@ python run.py cache                 # parse ATD once -> cache/tactical_atd.npz (
 python run.py check                 # check data
 python run.py baseline --window 50  # v0, must match the organizers' baseline 100%
 python run.py v1                    # v1, fallback
-python run.py ball-train --cv       # v2: train the ball reconstruction model (GPU), cross-validation by half
+python run.py ball-train --cv       # v2: train the ball reconstruction model (GPU), cross-validation by half, 40k steps (~1 h RTX)
 python run.py v2                    # v2: v1 + reconstructed ball (fallback)
 python run.py v3                    # v3: v2 + fouls/whistle (fallback)
 python run.py ball-predict          # unseen ball from the FROZEN weights models/ballnet.pt (CPU, deterministic, no training)
@@ -42,7 +42,7 @@ Data is looked up in: `MTAH_DATA_DIR` -> `./data` -> `../Dataset Drive`.
 - `sb/tagging.py` — Smart Tagging to video frames.
 - `sb/hmm.py` — 3-state HMM (H/A/D) + Viterbi.
 - `sb/v1.py` — v1: all parameters in `PARAMS`, each with its physical justification.
-- `models/ballnet.pt` — frozen ballnet weights COMMITTED to the public repo (weights only, no data): the submission is
+- `models/ballnet.pt` — frozen ballnet weights (40k-step model, sha256 511c9fab…, 30 Oct) COMMITTED to the public repo (weights only, no data): the submission is
   regenerated with `ball-predict` + `v4` without retraining (GPU training is not bit-reproducible; checked: identical
   reconstruction and identical CSV hash from the same weights). `ball-train` (final model) rewrites it.
 - `sb/ballnet.py` — ball reconstruction model (small transformer over the player set, self-supervised
@@ -106,7 +106,8 @@ Data is looked up in: `MTAH_DATA_DIR` -> `./data` -> `../Dataset Drive`.
 - `sb/export.py` — contract files in `exports/` (derived data, not committed).
 - `scripts/mask_test.py` — tests v1/v2/v3/v4 with the ball hidden ~41% in the public window.
 - PyTorch is installed separately (CUDA build from pytorch.org), needs Python <= 3.14.
-  Final max-performance training on the MacBook M5 (MPS, automatic); RTX for quick experiments.
+  The submission model was trained on the RTX laptop (CUDA, 40k steps, 30 Oct); the M5 (MPS) works too.
+  Retraining changes the CSV hash: adopt new weights only if the mask test improves, then re-check the hash on 2 machines.
   `SB_DEVICE=cpu|cuda|mps` forces the device.
 - `games.py`, `evaluation/` — copies of the organizers' code (MIT), DO NOT modify.
 - `experiments/` — experiment notes (configuration + scores), one file per experiment.

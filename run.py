@@ -468,7 +468,7 @@ def main():
     p.set_defaults(func=cmd_baseline)
     sub.add_parser("v1").set_defaults(func=cmd_v1)
     p = sub.add_parser("ball-train")
-    p.add_argument("--steps", type=int, default=20000)
+    p.add_argument("--steps", type=int, default=40000)  # early stopping peaked at 37-39.5k (2026-10-30)
     p.add_argument("--batch", type=int, default=512)
     p.add_argument("--cv", action="store_true", help="also train/validate across halves (3x time)")
     p.add_argument("--train-half", type=int, choices=(1, 2),

@@ -77,9 +77,12 @@ so the pitch stays quiet while the shape holds. **Shadow Replay**: when the oppo
 third after our space denial fell into its lowest 35% in the previous 10 s, the Shadow pitch freezes
 for 7 s on that second (also on the phone) and the Copilot feed keeps it; the same moments for the
 opponent show where they leave space. **Shadow Ball** (the uncertainty cloud of a reconstructed ball)
-is drawn there too. Then two advice maps
-built from the last 30 s (attack: largest space in the opponent half and who runs into it; defence:
-the danger zone in our half, who shifts, and a lower line when the centre-backs tire), a fatigue map,
+is drawn there too. Then two **simulation cards** (the off-ball model run forward, in the browser):
+from a real second of the last 30 s, up to 4 of our players move together (each within 5 m), chosen
+greedily so each move counts the ones already made. Defend = our weakest second while they had the
+ball (space denied before -> after); Attack = our latest second with the ball (space owned before ->
+after, and what it costs the rest defence). Each card loops now -> simulated. Without the off-ball
+outputs they fall back to the 30 s heat maps. Then a fatigue map,
 a Copilot feed with a mini-pitch per event, and movement per player with a heatmap. On top:
 "Need to know", the three things that matter now, ranked from all modules (fatigue, counter-attacks,
 the channel the opponent uses, pressure, space denial dropping, the last Shadow Replay, line height, a dangerous opponent, a chance);

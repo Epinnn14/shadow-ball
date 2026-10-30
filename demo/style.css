@@ -345,3 +345,4 @@ body.report-open { overflow: hidden; }
 .rchip.on { background: var(--shadow); color: #120D22; border-color: var(--shadow); }
 .pe-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .field select { min-height: 38px; padding: 0 8px; border-radius: 9px; border: 1px solid var(--line); background: var(--s2); color: var(--text); }
+#duelCard { align-self: start; }          /* no tall empty card before the first duels */

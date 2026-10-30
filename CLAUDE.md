@@ -61,7 +61,10 @@ Data is looked up in: `MTAH_DATA_DIR` -> `./data` -> `../Dataset Drive`.
   final third after our denial fell into its lowest 35% (kind `denial`) or after we lost the ball with thin rest
   defence (kind `rest`). In possession: "Rest defence" KPI; when thin (usual - 8 points) 2 amber cover arrows.
   Run `python run.py offball` before `python run.py demo`.
-  Also: Shadow Ball (sigma cloud, on the Shadow pitch), 30 s attack/defend suggestion map.
+  Also: Shadow Ball (sigma cloud, on the Shadow pitch). Attack/Defend cards = simulations (`simulateUnit` in app.js:
+  greedy unit move of up to 4 players, 16 candidates within 5 m, same model; Defend = weakest denial second of the
+  last 30 s, Attack = latest possession second + rest-defence cost; loops now -> simulated). The model has no
+  pressing/offside value, so defensive simulations lean towards dropping deeper: say so when presenting.
   "Need to know" (3 automatic priorities, laptop + phone), momentum per minute and attack lanes
   (final-third entries per side) from `momentum`/`entries` in clip.json.
   Set pieces (`setpieces`: type + team from Smart Tagging, position from the visible ball; throw-in team from

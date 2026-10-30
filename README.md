@@ -60,9 +60,14 @@ python run.py demo                      # replay clip, default 55'-70' -> export
 python run.py serve                     # prints the laptop and phone addresses
 ```
 
-Before kick-off the coach picks a formation (18 shapes), types names and numbers and adds his own
-player photos (kept on the laptop only; no photos are bundled). Names are matched to the tracked
-players by position (Hungarian assignment), so the chosen formation may differ from the detected one.
+Before kick-off the coach fills a line-up card (round face, number, name under the face): he picks a
+formation (18 shapes), then a position, then the player for it (search the squad, best fit for the
+position first, or type a new name); "Fill one by one" walks through every position. The opponent's
+card is optional (typed one by one or pasted as "number name" lines). Photos are the coach's own,
+kept on the laptop only (none are bundled). Names are matched to the tracked players by position
+(Hungarian assignment, both teams), so the chosen formation may differ from the detected one. Live,
+the **Shadow ratings** card shows both line-ups with a rating per player: 6.5 + movement without the
+ball (Shadow score vs the match average) + dangerous space held (vs the average for the position).
 The laptop then shows the full bench screen. The live pitch is kept plain (players, names, ball).
 Below it, the **Shadow pitch** is the core of the concept (`sb/offball.py`, once per second): the
 dangerous space each team controls (pitch control x a threat surface learned from the match), our
@@ -96,12 +101,13 @@ entries left/centre/right for both teams over 15 minutes). The phone also gets "
 classified by where it is taken: corner, free kick in the final third, other free kick, throw-in,
 goal kick; whether the team kept the ball 10 s later and reached the box) and 1v1 duels (for each of
 our defenders, the opponent he meets most in our half over 10 minutes: how often that opponent is
-goal-side of him and who wins the sprints). "Laporan" opens a two-page A4 report (print or save as
+goal-side of him and who wins the sprints). "Report" opens a three-page A4 report (print or save as
 PDF) for half-time or the team meeting: the score and the usual match statistics per half and in total
 (possession, number and length of possessions, chances created, counter-attacks, dangerous transitions,
 final-third and box entries, long balls, ball wins, counter-press regains, corners, free kicks,
 throw-ins, goal kicks, team distance and sprints), momentum, the three priorities and the advice, then
-the maps. Before kick-off the coach can also edit each player's profile (positions he can play, foot, three
+the maps, then a Shadow Ball page: space denied and rest defence per 5 minutes for both teams, the
+pressing traps, the Shadow ratings of our XI, the space leaks and every Shadow Replay so far. Before kick-off the coach can also edit each player's profile (positions he can play, foot, three
 keywords); the **Player Recommender** ranks the bench for a role from position fit, the traits the
 situation needs and the foot, and **Plan B** ranks the options (substitution, a deeper line, a back five
 on the side they attack, the first-half counter-press, an overload where the space is) and shows the

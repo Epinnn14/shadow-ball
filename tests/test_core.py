@@ -403,3 +403,16 @@ def test_leak_blocks_against_first_15_minutes():
     b, rel = offball.leak_blocks(pd.DataFrame(rows), stamina)
     last = b[b.block == 75].iloc[0]
     assert (last.contribution, last.base_contribution, last.gap, last.base_gap, last.level) == (5.0, 10.0, 8.0, 2.0, "red")
+
+
+def test_rating_rows_per_minute_and_family_reference():
+    import pandas as pd
+    from sb import demo
+    a = paths.HALVES[0][0]
+    rows = [{"frame": a + k * 25, "half": 1, "team": "H", "label": "LCB", "shadow_score": 60.0, "contribution": 10.0} for k in range(90)]
+    rows += [{"frame": a + k * 25, "half": 1, "team": "A", "label": "RCB", "shadow_score": 40.0, "contribution": 20.0} for k in range(30)]
+    rows += [{"frame": a, "half": 1, "team": "H", "label": "GK", "shadow_score": 50.0, "contribution": 99.0}]
+    out, ref = demo.rating_rows(pd.DataFrame(rows), {"LCB": 0, "RCB": 1, "GK": 2}, a + 200 * 25)
+    assert ["H", 0, 1, 0, 60, 3600, 600.0] in out and ["H", 0, 1, 1, 30, 1800, 300.0] in out
+    assert not any(r[1] == 2 for r in out)                       # no rating for goalkeepers
+    assert ref["LCB"] == ref["RCB"] == 12.5                       # one family: centre-backs of both teams

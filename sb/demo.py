@@ -22,6 +22,7 @@ far touchline):
   stamina     Fatigue Risk Score per role and 5-min block
   transitions every turnover up to the end of the clip (for counter-press KPIs)
   pressing    Pressing Trap Map seconds; leak: denial leak per role and 5-min block (pressing_and_leak)
+  ratings     live Shadow rating inputs per role and minute; rating_ref per position (rating_rows)
   shadow      the off-ball core once per second: space denied, shadow positions, Shadow Replay
               moments (see shadow_block; null until `python run.py offball` has been run)
 """
@@ -218,6 +219,7 @@ def build(track, labels, ball, sigma, source, role_df, tactics_dir, minute_from=
                           pd.read_parquet(os.path.join(tactics_dir, "transitions.parquet")))
 
     press_rows, leak_rows = pressing_and_leak(tactics_dir, label_idx, last)
+    ratings, rating_ref = rating_rows(ob_players, label_idx, last)
 
     with open(os.path.join(tactics_dir, "formations.json")) as handle:
         formations = json.load(handle)
@@ -241,7 +243,7 @@ def build(track, labels, ball, sigma, source, role_df, tactics_dir, minute_from=
         "timeline": timeline, "events": events, "stamina": stam_rows, "transitions": tr_rows,
         "momentum": momentum, "entries": entries, "setpieces": setpieces,
         "match_events": events_st, "runs": runs, "team_running": running, "shadow": shadow,
-        "pressing": press_rows, "leak": leak_rows,
+        "pressing": press_rows, "leak": leak_rows, "ratings": ratings, "rating_ref": rating_ref,
     }
 
 
@@ -414,6 +416,8 @@ def shadow_block(players, teams, entries, label_idx, first, last, surface, trans
              kind 'rest': a lost ball that ended in a final-third entry within 10 s, when rest defence
                in the second before the loss was below the team's median (movers: cover positions).
                It replaces a 'denial' moment for the same entry: losing the ball came first.
+    trend    per 5-min block up to the end of the clip: [half, block start minute, team, mean space denied
+             while defending, seconds, mean rest defence while in possession, seconds]
     surface  the learned threat surface (5 m cells, attacking frame) to paint dangerous space."""
     if players is None or teams is None or not len(teams):
         return None
@@ -475,6 +479,19 @@ def shadow_block(players, teams, entries, label_idx, first, last, surface, trans
         g = g[g.phase == "without ball"].sort_values("gap", ascending=False).head(3)
         moments.append([int(entry), low, defender, round(float(denial[i]), 1), movers(g, "gap", "shadow_x", "shadow_y"), "denial"])
 
+    # per 5-min block from kick-off to the end of the clip: space denied (team without the ball) and
+    # rest defence (team with it), for the report's trend
+    starts = {h: paths.HALVES[h - 1][0] for h in (1, 2)}
+    block = (((teams.frame - teams.half.map(starts)) / paths.FPS / 60 // 5) * 5).astype(int) + np.where(teams.half == 1, 0, 45)
+    tt = teams.assign(block=block, denial=denial, defending=defending)
+    trend = []
+    for (h, b), g in tt.groupby(["half", "block"]):
+        for team in ("H", "A"):
+            d = g[g.defending == team].denial
+            r = g[g.possession == team].rest.dropna() if has_rest else pd.Series(dtype=float)
+            trend.append([int(h), int(b), team, round(float(d.mean()), 1) if len(d) else None, int(len(d)),
+                          round(float(r.mean()), 1) if len(r) else None, int(len(r))])
+
     clip_t = teams[(teams.frame >= first) & (teams.frame <= last)]
     keep = players.gap >= GAP_MIN
     if has_rest:
@@ -494,8 +511,32 @@ def shadow_block(players, teams, entries, label_idx, first, last, surface, trans
                        round(float(r.gap_H), 1), round(float(r.gap_A), 1),
                        _num(getattr(r, "rest", None)), None if getattr(r, "behind", None) is None else int(r.behind)]
                       for r in clip_t.itertuples()],
-            "players": rows, "usual": usual, "usual_rest": usual_rest, "moments": moments,
+            "players": rows, "usual": usual, "usual_rest": usual_rest, "moments": moments, "trend": trend,
             "surface": None if surface is None else np.round(np.asarray(surface), 3).tolist(), "surface_cell": 5.0}
+
+
+FAMILY = {"LCB": "CB", "RCB": "CB", "CB": "CB", "LB": "FB", "RB": "FB", "LWB": "FB", "RWB": "FB",
+          "LCDM": "DM", "RCDM": "DM", "CDM": "DM", "CM": "CM", "LCM": "CM", "RCM": "CM", "LM": "WM", "RM": "WM",
+          "CAM": "AM", "LAM": "AM", "RAM": "AM", "LW": "W", "RW": "W", "ST": "ST", "CF": "ST"}
+
+
+def rating_rows(players, label_idx, last):
+    """Inputs of the live Shadow rating, per role and match minute up to the end of the clip:
+    [team, label idx, half, match minute, seconds, sum of Shadow scores, sum of contributions].
+    The app adds them up to the current time. ref = each position family's mean contribution in
+    this match (both teams), the yardstick for 'space held'."""
+    if players is None or not len(players):
+        return None, None
+    q = players[(players.frame <= last) & (players.label != "GK")]
+    starts = {h: paths.HALVES[h - 1][0] for h in (1, 2)}
+    minute = ((q.frame - q.half.map(starts)) / paths.FPS // 60).astype(int) + np.where(q.half == 1, 0, 45)
+    g = q.assign(minute=minute).groupby(["team", "label", "half", "minute"]).agg(
+        n=("shadow_score", "size"), score=("shadow_score", "sum"), contrib=("contribution", "sum")).reset_index()
+    rows = [[r.team, label_idx.get(r.label, -1), int(r.half), int(r.minute), int(r.n), round(float(r.score)), round(float(r.contrib), 1)]
+            for r in g.itertuples()]
+    fam = players.label.map(FAMILY)
+    ref = players.assign(fam=fam).dropna(subset=["fam"]).groupby("fam").contribution.mean()
+    return rows, {lab: round(float(ref[f]), 2) for lab, f in FAMILY.items() if f in ref.index}
 
 
 def pressing_and_leak(out_dir, label_idx, last):

@@ -53,8 +53,12 @@ Data is looked up in: `MTAH_DATA_DIR` -> `./data` -> `../Dataset Drive`.
 - `sb/demo.py` — demo clip data; `demo/` — web app (HTML/CSS/JS with no libraries, runs offline).
   Laptop = full screen & time controller; screen <900 px (phone) = vertical pitch + movement,
   follows the laptop's time via /api/state. `?mode=lead|follow` forces a role, `?setup=0` skips setup.
-  `demo/data.js` = 18 formations + starting squads (editable by the coach). Line-up + photos are saved via
-  /api/lineup to `exports/demo/lineup.json` (local). All views: our team attacks to the right/up.
+  `demo/data.js` = 18 formations + starting squads (editable by the coach). Setup = FotMob-style card: position
+  first, then the player (picker: squad search ranked by fit, or a new name; "Fill one by one"); optional opponent
+  card (`lineup.opp`, typed or pasted). Line-up + photos are saved via /api/lineup to `exports/demo/lineup.json`
+  (local; players.json gets the opponent names without photos). All views: our team attacks to the right/up.
+  Live "Shadow ratings" card: both XIs, rating = 6.5 + 0.45 x (Shadow score - 55) [+-1.8] + 1.2 x (space held vs
+  position-family mean - 1) [+-1.2], from `ratings`/`rating_ref` in clip.json (completed minutes only).
   The live pitch is plain (players, names, ball). Below it the Shadow pitch (the core, `shadow` in clip.json from
   `sb/offball.py`): dangerous space each side controls, our space denied vs usual, max 3 arrows to the best reachable
   position (>= 15 per mille, held 2 s), and Shadow Replay (7 s freeze, also on the phone) when the opponent enters our
@@ -69,8 +73,9 @@ Data is looked up in: `MTAH_DATA_DIR` -> `./data` -> `../Dataset Drive`.
   (final-third entries per side) from `momentum`/`entries` in clip.json.
   Set pieces (`setpieces`: type + team from Smart Tagging, position from the visible ball; throw-in team from
   who has possession after the dead ball), 1v1 duels (computed in the browser, 10 min), score from the GOALS tag.
-  "Report" button = 2 A4 pages (print/PDF): match statistics for half 1 / half 2 / total
-  (`match_events`, `runs`, `team_running` in clip.json) + momentum + priorities; page 2 maps.
+  "Report" button = 3 A4 pages (print/PDF): match statistics for half 1 / half 2 / total
+  (`match_events`, `runs`, `team_running` in clip.json) + momentum + priorities; page 2 maps; page 3 Shadow Ball
+  (space denied / rest defence per 5 min from `shadow.trend`, pressing traps, Shadow ratings, space leaks, replays).
   Shots are NOT in the data (no events, the ball is often invisible in front of goal): use "chances created".
   `demo/decide.js` = pure decision logic (needsFor, recommend, planB), tested by `tests/decide_test.js`
   (run through pytest when node is installed). Player profiles (pos, foot, 3 keywords) in `demo/data.js`,

@@ -354,9 +354,12 @@ def cmd_serve(args):
                     with open(lineup_path, "w") as handle:
                         json.dump({"lineup": data["lineup"]}, handle)
                     squad = [{k: v for k, v in p.items() if k != "photo"} for p in data["lineup"].get("squad", [])]
+                    opp = data["lineup"].get("opp") or {}
+                    opp_xi = {slot: {k: v for k, v in (p or {}).items() if k != "photo"} for slot, p in (opp.get("xi") or {}).items()}
                     with open(players_path, "w") as handle:
                         json.dump({"formation": data["lineup"].get("formation"), "xi": data["lineup"].get("xi"),
-                                   "squad": squad}, handle, indent=1)
+                                   "squad": squad, "opponent": {"name": data["lineup"].get("oppName"),
+                                                                "formation": opp.get("formation"), "xi": opp_xi}}, handle, indent=1)
             except (ValueError, KeyError, TypeError):
                 self.send_error(400)
                 return

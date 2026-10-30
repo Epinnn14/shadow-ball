@@ -53,14 +53,28 @@
       <p class="muted small" id="detected"></p>
     </div>
     <div class="panel board">
-      <div class="board-head"><h2 id="boardTitle">Line-up</h2><span class="muted small" id="slotHint">Click a position, then a player</span></div>
-      <div class="board-pitch" id="board"></div>
+      <div class="board-head">
+        <div class="seg" id="setupTabs"><button type="button" data-t="H" class="on" id="setupUs">Us</button><button type="button" data-t="A" id="setupThem">Opponent (optional)</button></div>
+        <button type="button" class="ghost small" id="stepBtn">Fill one by one</button>
+      </div>
+      <div class="lu-card">
+        <div class="lu-head"><b id="boardTitle">Line-up</b><span id="boardCount" class="muted small"></span></div>
+        <div class="board-pitch" id="board"></div>
+      </div>
+      <span class="muted small" id="slotHint">Click a position, then a player</span>
     </div>
     <div class="panel">
-      <div class="board-head"><h2>Squad</h2><button type="button" class="ghost small" id="addPlayer">+ Player</button></div>
+      <div class="picker" id="picker" hidden></div>
+      <div class="opp-paste" id="oppPaste" hidden>
+        <h2>Paste their XI</h2>
+        <p class="muted small">One player per line, "number name", in the order of the formation (goalkeeper, then the back line from their left, up to the strikers). Names stay on this laptop.</p>
+        <textarea id="oppText" rows="11" placeholder="1 Unai Simón&#10;18 Óscar de Marcos&#10;..."></textarea>
+        <button type="button" class="ghost small" id="oppFill">Fill the line-up</button>
+      </div>
+      <div class="board-head" id="squadHead"><h2>Squad</h2><button type="button" class="ghost small" id="addPlayer">+ Player</button></div>
       <div class="squad-edit" id="squadEdit"></div>
       <div class="profile" id="profileEditor" hidden></div>
-      <p class="muted small">Photos are added from this laptop and stay on it (none are bundled: photos are copyrighted).</p>
+      <p class="muted small" id="photoNote">Photos are added from this laptop and stay on it (none are bundled: photos are copyrighted).</p>
     </div>
   </div>
 </section>
@@ -168,6 +182,13 @@
     <section class="card">
       <header><h2>Need to know</h2><span class="muted small">now</span></header>
       <div class="prio" id="prio"></div>
+    </section>
+    <section class="card" id="luCard">
+      <header><h2>Shadow ratings</h2><span class="muted small" id="luNote">live · 6.5 = average</span></header>
+      <div class="lu-team" id="luTop"></div>
+      <div class="lu-live" id="luLive"></div>
+      <div class="lu-team" id="luBot"></div>
+      <p class="note">Rating from movement without the ball (Shadow score) and the dangerous space each player holds against the average for his position.</p>
     </section>
     <section class="card" id="planCard">
       <header><h2>Plan B</h2><span class="muted small">ranked · simulated on the last 30 s</span></header>

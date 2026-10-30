@@ -175,14 +175,12 @@
   const shortName = (p) => { if (!p) return ''; const parts = p.name.trim().split(/\s+/); return parts.length > 1 && parts[0].length > 2 ? parts.slice(1).join(' ') : p.name; };
 
   // The coach's formation slots are matched to the roles our tracking finds (same Hungarian idea
-  // as roles.py): each named player lands on the detected role closest to his slot.
-  function applyLineup() {
-    document.documentElement.style.setProperty('--home', lineup.kitH);
-    document.documentElement.style.setProperty('--away', lineup.kitA);
-    roleToPlayer = {};
-    const det = meta.role_means.H, detLabels = Object.keys(det);
-    const slots = D.slots(lineup.formation).filter((s) => s.label !== 'GK');
-    if (lineup.xi.GK) roleToPlayer.GK = player(lineup.xi.GK);
+  // as roles.py): each named player lands on the detected role closest to his slot. Works for both
+  // teams: the opponent's names are optional (lineup.opp).
+  function matchRoles(team, formation) {
+    const det = meta.role_means[team] || {}, detLabels = Object.keys(det), out = { GK: 'GK' };
+    const slots = D.slots(formation).filter((s) => s.label !== 'GK');
+    if (!detLabels.length) return out;
     const depths = detLabels.map((l) => det[l][0]), dmin = Math.min(...depths), dmax = Math.max(...depths);
     const pts = detLabels.map((l) => ({ l, x: det[l][1] / W, y: 0.2 + 0.66 * (det[l][0] - dmin) / Math.max(1, dmax - dmin) }));
     const n = Math.max(pts.length, slots.length);
@@ -191,21 +189,29 @@
       const exact = pts[i].l === slots[j].label ? -0.05 : 0;
       return (pts[i].x - slots[j].x) ** 2 + (pts[i].y - slots[j].y) ** 2 + exact;
     }));
-    hungarian(cost).forEach((j, i) => {
-      if (i < pts.length && j < slots.length) {
-        const pid = lineup.xi[slots[j].label];
-        if (pid) roleToPlayer[pts[i].l] = Object.assign({ slot: slots[j].label }, player(pid));
-      }
-    });
+    hungarian(cost).forEach((j, i) => { if (i < pts.length && j < slots.length) out[pts[i].l] = slots[j].label; });
+    return out;
+  }
+  const oppFormation = () => (lineup.opp && D.FORMATIONS[lineup.opp.formation] ? lineup.opp.formation : D.FORMATIONS[meta.formation.A] ? meta.formation.A : '4-4-2');
+  let oppToPlayer = {}, roleToSlot = { H: {}, A: {} };
+  function applyLineup() {
+    document.documentElement.style.setProperty('--home', lineup.kitH);
+    document.documentElement.style.setProperty('--away', lineup.kitA);
+    roleToPlayer = {}; oppToPlayer = {};
+    roleToSlot.H = matchRoles('H', lineup.formation); roleToSlot.A = matchRoles('A', oppFormation());
+    for (const [role, slot] of Object.entries(roleToSlot.H)) { const pid = lineup.xi[slot]; if (pid && player(pid)) roleToPlayer[role] = Object.assign({ slot }, player(pid)); }
+    if (lineup.opp) for (const [role, slot] of Object.entries(roleToSlot.A)) { const p = lineup.opp.xi[slot]; if (p && p.name) oppToPlayer[role] = Object.assign({ slot }, p); }
     $('match').textContent = `${meta.teams.H} – ${lineup.oppName || meta.teams.A} · ${lineup.formation} vs ${meta.formation.A}`;
     $('match').dataset.score = '';
     $('tabA').textContent = (lineup.oppName || meta.teams.A).split(' ')[0];
     $('tabH').textContent = meta.teams.H;
-    advCache = -1; heatCache = '';
+    advCache = -1; heatCache = ''; luKey = '';
   }
 
-  // ---------------------------------------------------------------- setup screen
-  let selSlot = null;
+  // ---------------------------------------------------------------- setup screen (FotMob-style card)
+  // Flow: pick a position, then the player for it (search the squad or type a new name); "Fill one by
+  // one" walks through every position in order. The opponent's card is optional (names typed or pasted).
+  let selSlot = null, setupTeam = 'H', stepMode = false;
   function openSetup() {
     S.playing = false; $('setup').hidden = false; $('live').hidden = true; document.body.classList.add('setup-open');
     $('oppName').value = lineup.oppName || meta.teams.A; $('kitH').value = lineup.kitH; $('kitA').value = lineup.kitA;
@@ -221,19 +227,40 @@
     return `<svg viewBox="0 0 100 60" aria-hidden="true"><rect x="1" y="1" width="98" height="58" rx="6" fill="#24603A"/>` +
       sl.map((s) => `<circle cx="${4 + s.y * 92}" cy="${4 + s.x * 52}" r="3.6" fill="#fff"/>`).join('') + '</svg>';
   }
+  const curFormation = () => (setupTeam === 'H' ? lineup.formation : oppFormation());
+  function ensureOpp() { if (!lineup.opp) lineup.opp = { formation: oppFormation(), xi: {} }; return lineup.opp; }
+  function slotPlayer(team, label) { return team === 'H' ? player(lineup.xi[label]) : (lineup.opp && lineup.opp.xi[label]) || null; }
+  function slotFace(p, team, label) {
+    const style = `--kit:var(--${team === 'H' ? 'home' : 'away'});` + (p && p.photo ? `background-image:url(${p.photo})` : '');
+    const inner = p ? (p.photo ? '' : (p.num != null && p.num !== '' ? String(p.num) : initials(p.name))) : '+';
+    return `<span class="ph" style="${style}">${inner}${p && p.num != null && p.num !== '' && p.photo ? `<span class="no">${p.num}</span>` : ''}</span>`;
+  }
   function renderSetup() {
-    $('formationList').innerHTML = Object.keys(D.FORMATIONS).map((f) =>
-      `<button type="button" class="fm${f === lineup.formation ? ' on' : ''}" data-f="${f}">${formationSvg(f)}<span>${f}</span></button>`).join('');
+    const team = setupTeam, f = curFormation();
+    $('formationList').innerHTML = Object.keys(D.FORMATIONS).map((k) =>
+      `<button type="button" class="fm${k === f ? ' on' : ''}" data-f="${k}">${formationSvg(k)}<span>${k}</span></button>`).join('');
     $('formationList').querySelectorAll('.fm').forEach((b) => b.onclick = () => changeFormation(b.dataset.f));
-    const slots = D.slots(lineup.formation);
-    $('boardTitle').textContent = `Line-up · ${lineup.formation}`;
+    const slots = D.slots(f), filled = slots.filter((s) => slotPlayer(team, s.label)).length;
+    $('boardTitle').textContent = `${team === 'H' ? meta.teams.H : (lineup.oppName || meta.teams.A)} · ${f}`;
+    $('boardCount').textContent = `${filled}/${slots.length} named`;
     $('board').innerHTML = slots.map((s) => {
-      const p = player(lineup.xi[s.label]);
+      const p = slotPlayer(team, s.label);
       return `<button type="button" class="slot${p ? '' : ' empty'}${selSlot === s.label ? ' sel' : ''}" data-s="${s.label}"
-        style="left:${6 + s.x * 88}%;top:${94 - s.y * 86}%">${avatar(p, 'H', s.label)}<span class="nm">${p ? esc(shortName(p)) : 'Empty'}</span><span class="rl">${s.label}</span></button>`;
+        style="left:${6 + s.x * 88}%;top:${94 - s.y * 86}%;--kit:var(--${team === 'H' ? 'home' : 'away'})">${slotFace(p, team, s.label)}<span class="nm">${p ? esc(shortName(p)) : 'Add player'}</span><span class="rl">${s.label}</span></button>`;
     }).join('');
-    $('board').querySelectorAll('.slot').forEach((b) => b.onclick = () => { selSlot = selSlot === b.dataset.s ? null : b.dataset.s; renderSetup(); });
-    $('slotHint').textContent = selSlot ? `Pick a player for ${selSlot} from the squad` : 'Click a position, then a player';
+    $('board').querySelectorAll('.slot').forEach((b) => b.onclick = () => { stepMode = false; selSlot = selSlot === b.dataset.s ? null : b.dataset.s; renderSetup(); });
+    $('slotHint').textContent = stepMode ? `One by one: ${slots.findIndex((s) => s.label === selSlot) + 1} of ${slots.length}` :
+      team === 'H' ? 'Click a position, then pick the player (or type a new name)' : 'Optional: name their players so the live screens use names instead of positions';
+    $('stepBtn').textContent = stepMode ? 'Stop' : 'Fill one by one';
+    document.querySelectorAll('#setupTabs button').forEach((b) => b.classList.toggle('on', b.dataset.t === team));
+    $('setupThem').textContent = lineup.opp && Object.keys(lineup.opp.xi).length ? (lineup.oppName || meta.teams.A).split(' ')[0] : 'Opponent (optional)';
+    // right column: the picker for the selected position; the squad (us) or the paste box (them)
+    renderPicker();
+    $('oppPaste').hidden = team !== 'A';
+    for (const id of ['squadHead', 'squadEdit', 'photoNote']) $(id).hidden = team !== 'H';
+    if (team === 'H') renderSquad(); else $('profileEditor').hidden = true;
+  }
+  function renderSquad() {
     const inXI = {}; for (const [l, id] of Object.entries(lineup.xi)) inXI[id] = l;
     $('squadEdit').innerHTML = lineup.squad.map((p) => `<div class="se${inXI[p.id] ? ' inxi' : ''}${selSlot ? ' pick' : ''}" data-id="${p.id}">
         <label class="av" title="Add a photo" style="${p.photo ? `background-image:url(${p.photo})` : ''}">${p.photo ? '' : initials(p.name)}<input type="file" accept="image/*" hidden></label>
@@ -254,12 +281,69 @@
         for (const l in lineup.xi) if (lineup.xi[l] === p.id) delete lineup.xi[l];
         renderSetup();
       };
-      row.onclick = (e) => {
-        if (!selSlot || e.target.closest('input,label,button')) return;
-        for (const l in lineup.xi) if (lineup.xi[l] === p.id) delete lineup.xi[l];
-        lineup.xi[selSlot] = p.id; selSlot = null; renderSetup();
-      };
+      row.onclick = (e) => { if (!selSlot || e.target.closest('input,label,button')) return; assign(p); };
     });
+  }
+  // ---- the picker: search our squad (best fit for the position first) or type a new player
+  function renderPicker() {
+    const box = $('picker'), team = setupTeam;
+    if (!selSlot) { box.hidden = true; return; }
+    box.hidden = false;
+    const cur = slotPlayer(team, selSlot), DEC = window.SB_DECIDE;
+    box.innerHTML = `<div class="pk-head"><b>${selSlot}</b><span class="muted small">${cur ? 'now: ' + esc(cur.name) : 'empty'}</span></div>
+      <div class="pk-row"><input id="pkName" placeholder="${team === 'H' ? 'Search the squad or type a new name' : 'Player name'}" autocomplete="off">
+      <input id="pkNum" placeholder="No." inputmode="numeric"></div>
+      <div class="pk-list" id="pkList"></div>
+      <div class="pk-actions">${cur ? '<button type="button" class="ghost small" id="pkClear">Clear position</button>' : ''}
+        ${team === 'A' ? '<label class="ghost small pk-photo">Photo<input type="file" accept="image/*" hidden id="pkPhoto"></label>' : ''}
+        <button type="button" class="ghost small" id="pkSkip">${stepMode ? 'Skip' : 'Close'}</button></div>`;
+    const name = $('pkName'), num = $('pkNum');
+    if (team === 'A' && cur) { name.value = cur.name || ''; num.value = cur.num != null ? cur.num : ''; }
+    const list = () => {
+      const q = name.value.trim().toLowerCase();
+      if (team === 'A') {
+        $('pkList').innerHTML = q ? `<button type="button" class="pk-item first" data-new="1"><span class="av">${esc(initials(name.value))}</span><span class="who"><b>${esc(name.value.trim())}</b><span>press Enter to set ${selSlot}</span></span><em>${esc(num.value)}</em></button>` : '';
+      } else {
+        const inXI = new Set(Object.values(lineup.xi));
+        const rows = lineup.squad.filter((p) => !q || p.name.toLowerCase().includes(q) || String(p.num) === q)
+          .map((p) => ({ p, fit: DEC.canPlay(p, selSlot) })).sort((a, b) => b.fit - a.fit || a.p.num - b.p.num).slice(0, 8);
+        const exact = rows.some((r) => r.p.name.toLowerCase() === q);
+        $('pkList').innerHTML = rows.map((r, i) => `<button type="button" class="pk-item${i === 0 ? ' first' : ''}" data-id="${r.p.id}">${avatar(r.p, 'H', '')}
+            <span class="who"><b>${esc(r.p.name)}</b><span>${(r.p.pos || []).join(' · ') || r.p.group}${inXI.has(r.p.id) ? ' · in the XI' : ''}</span></span><em>${r.fit === 1 ? 'fits' : r.fit >= 0.85 ? 'same job' : ''}</em></button>`).join('') +
+          (q && !exact ? `<button type="button" class="pk-item${rows.length ? '' : ' first'}" data-new="1"><span class="av">+</span><span class="who"><b>Add “${esc(name.value.trim())}”</b><span>new player for ${selSlot}${num.value ? ', number ' + esc(num.value) : ''}</span></span><em></em></button>` : '');
+      }
+      $('pkList').querySelectorAll('.pk-item').forEach((b) => b.onclick = () => pick(b));
+    };
+    const pick = (b) => {
+      if (!b) return;
+      if (b.dataset.id) { assign(player(b.dataset.id)); return; }
+      const nm = name.value.trim(); if (!nm) return;
+      const n = parseInt(num.value, 10);
+      if (team === 'A') { assign({ name: nm, num: isNaN(n) ? null : n, photo: (cur && cur.photo) || null }); return; }
+      const p = { id: 'n' + Date.now(), num: isNaN(n) ? Math.max(0, ...lineup.squad.map((q) => q.num)) + 1 : n, name: nm,
+                  group: { GK: 'GK', DEF: 'DF', MID: 'MF', ATT: 'FW' }[window.SB_DECIDE.GROUP[selSlot]] || 'MF', pos: [selSlot], foot: null, keys: [], photo: null };
+      lineup.squad.push(p); assign(p);
+    };
+    name.oninput = list; num.oninput = list;
+    name.onkeydown = num.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); pick($('pkList').querySelector('.pk-item.first')); } };
+    list(); setTimeout(() => name.focus(), 0);
+    if ($('pkClear')) $('pkClear').onclick = () => { if (team === 'H') delete lineup.xi[selSlot]; else delete ensureOpp().xi[selSlot]; next(); };
+    $('pkSkip').onclick = () => next();
+    if ($('pkPhoto')) $('pkPhoto').onchange = (e) => { const p = ensureOpp().xi[selSlot] || (ensureOpp().xi[selSlot] = { name: name.value.trim() || selSlot, num: null }); if (e.target.files[0]) loadPhoto(e.target.files[0], p); };
+  }
+  function assign(p) {
+    if (setupTeam === 'H') { for (const l in lineup.xi) if (lineup.xi[l] === p.id) delete lineup.xi[l]; lineup.xi[selSlot] = p.id; }
+    else { const o = ensureOpp(); o.formation = oppFormation(); o.xi[selSlot] = p; }
+    next(true);
+  }
+  // after a pick: one-by-one mode walks to the next position; otherwise the picker closes
+  function next() {
+    if (stepMode) {
+      const order = D.slots(curFormation()).map((s) => s.label), i = order.indexOf(selSlot);
+      selSlot = i >= 0 && i < order.length - 1 ? order[i + 1] : null;
+      if (!selSlot) stepMode = false;
+    } else selSlot = null;
+    renderSetup();
   }
   // ---------------------------------------------------------------- player profile editor
   let editId = null;
@@ -286,13 +370,15 @@
 
   function changeFormation(f) {
     // keep the same players, moved to the nearest slots of the new shape
-    const old = D.slots(lineup.formation).filter((s) => lineup.xi[s.label]), neu = D.slots(f);
+    const team = setupTeam, from = curFormation(), xiOld = team === 'H' ? lineup.xi : ensureOpp().xi;
+    const old = D.slots(from).filter((s) => xiOld[s.label]), neu = D.slots(f);
     const n = Math.max(old.length, neu.length);
     const cost = Array.from({ length: n }, (_, i) => Array.from({ length: n }, (_, j) =>
       i < old.length && j < neu.length ? (old[i].x - neu[j].x) ** 2 + (old[i].y - neu[j].y) ** 2 + (old[i].label === 'GK') * (neu[j].label !== 'GK') * 9 : 0));
     const xi = {};
-    hungarian(cost).forEach((j, i) => { if (i < old.length && j < neu.length) xi[neu[j].label] = lineup.xi[old[i].label]; });
-    lineup.formation = f; lineup.xi = xi; selSlot = null; renderSetup();
+    hungarian(cost).forEach((j, i) => { if (i < old.length && j < neu.length) xi[neu[j].label] = xiOld[old[i].label]; });
+    if (team === 'H') { lineup.formation = f; lineup.xi = xi; } else { lineup.opp.formation = f; lineup.opp.xi = xi; }
+    selSlot = null; stepMode = false; renderSetup();
   }
   function loadPhoto(file, p) {
     const img = new Image(), url = URL.createObjectURL(file);
@@ -338,6 +424,7 @@
         .map((r) => ({ role: r.label, player: (roleToPlayer[r.label] || {}).name || null, risk: r.risk, level: r.level })),
       duels: (S.duels || []).map((d) => ({ defender: (roleToPlayer[d.def] || {}).name || d.def, role: d.def, opponent: d.att, goal_side: Math.round(d.behind * 100) / 100 })),
       shadow: shadowSnapshot(f),
+      shadow_ratings: Object.entries(S.ratings || {}).filter(([k]) => k[0] === 'H').map(([k, r]) => ({ player: nameOf(k.slice(2)), role: k.slice(2), rating: Math.round(r.rating * 10) / 10 })),
       space_leaks: (S.leaks || []).slice(0, 4).map((r) => ({ player: nameOf(r.role), role: r.role, ratio_vs_first_15_min: Math.round(r.ratio * 10) / 10, flagged: r.flag, fatigue: r.risk, level: r.level })),
       pressing: S.pressing ? { best_zone: S.pressing.best ? { where: P_BAND.H[S.pressing.best.band], won_back_press: Math.round(S.pressing.best.regP * 100), won_back_hold: Math.round(S.pressing.best.regH * 100) } : null,
                                worst_zone: S.pressing.worst ? { where: P_BAND.H[S.pressing.worst.band], won_back_press: Math.round(S.pressing.worst.regP * 100), won_back_hold: Math.round(S.pressing.worst.regH * 100),
@@ -393,6 +480,16 @@
     $('repClose').onclick = () => { $('report').hidden = true; document.body.classList.remove('report-open'); };
     $('repPrint').onclick = () => window.print();
     $('startBtn').onclick = closeSetup;
+    document.querySelectorAll('#setupTabs button').forEach((b) => b.onclick = () => { setupTeam = b.dataset.t; selSlot = null; stepMode = false; editId = null; renderSetup(); });
+    $('stepBtn').onclick = () => { stepMode = !stepMode; selSlot = stepMode ? D.slots(curFormation())[0].label : null; renderSetup(); };
+    $('oppFill').onclick = () => {
+      const order = D.slots(oppFormation()).map((s) => s.label), o = ensureOpp();
+      $('oppText').value.split(/\n+/).map((l) => l.trim()).filter(Boolean).slice(0, order.length).forEach((line, i) => {
+        const m = line.match(/^(\d+)[\s.,:-]+(.+)$/);
+        o.xi[order[i]] = Object.assign(o.xi[order[i]] || {}, m ? { num: +m[1], name: m[2].trim() } : { num: null, name: line });
+      });
+      o.formation = oppFormation(); renderSetup();
+    };
     $('shReplayClose').onclick = closeReplay;
     document.querySelectorAll('#pressTabs button').forEach((b) => b.onclick = () => {
       pressTeam = b.dataset.t; pressCache = ''; document.querySelectorAll('#pressTabs button').forEach((x) => x.classList.toggle('on', x === b)); pressingCard(videoFrame(S.t));
@@ -493,9 +590,9 @@
       g.beginPath(); g.ellipse(a + r * 0.25, b + r * 0.55, r * 0.95, r * 0.45, 0, 0, 7); g.fillStyle = 'rgba(0,0,0,.28)'; g.fill();
       g.beginPath(); g.arc(a, b, r, 0, 7); g.fillStyle = kit; g.fill(); g.lineWidth = 1.5; g.strokeStyle = 'rgba(255,255,255,.9)'; g.stroke();
       if (S.sel === p.k) { g.beginPath(); g.arc(a, b, r + 6, 0, 7); g.strokeStyle = COL.shadow; g.lineWidth = 2.5; g.stroke(); }
-      const pl = p.team === 'H' ? roleToPlayer[p.role] : null;
+      const pl = p.team === 'H' ? roleToPlayer[p.role] : oppToPlayer[p.role];
       g.fillStyle = '#fff'; g.font = `700 ${Math.round(r * 0.95)}px ${CSS.getPropertyValue('--mono')}`; g.textAlign = 'center'; g.textBaseline = 'middle';
-      g.fillText(pl ? String(pl.num) : '', a, b + 0.5);
+      g.fillText(pl && pl.num != null ? String(pl.num) : '', a, b + 0.5);
       if (S.layers.names || narrow()) {
         const text = pl ? shortName(pl) : p.role;
         v.label(text, p.x, p.y, r + 9, { size: narrow() ? 9.5 : 10.5, color: p.team === 'H' ? '#fff' : '#FFE1D8' });
@@ -580,7 +677,7 @@
     return parts.join(', ') || 'hold';
   }
   const pctM = (permille) => Math.round(permille / 10) + '%';
-  const nameFor = (team, role) => (team === 'H' ? nameOf(role) : `${(lineup.oppName || meta.teams.A).split(' ')[0]} ${role}`);
+  const nameFor = (team, role) => (team === 'H' ? nameOf(role) : oppToPlayer[role] ? shortName(oppToPlayer[role]) : `${(lineup.oppName || meta.teams.A).split(' ')[0]} ${role}`);
   const moveColor = (m) => (m.kind === 'cover' ? COL.warn : COL.shadow);
 
   // the model's control (same as sb/offball.py, players standing) x threat, painted per 3 m cell.
@@ -626,7 +723,7 @@
       if (ours && team === 'H') {
         const pl = roleToPlayer[p.role];
         g.fillStyle = '#fff'; g.font = `700 ${Math.round(r * 0.9)}px ${CSS.getPropertyValue('--mono')}`; g.textAlign = 'center'; g.textBaseline = 'middle';
-        g.fillText(pl ? String(pl.num) : '', a, b + 0.5);
+        g.fillText(pl && pl.num != null ? String(pl.num) : '', a, b + 0.5);
       }
       if (ours && mover.has(p.role)) { g.beginPath(); g.arc(a, b, r + 3, 0, 7); g.strokeStyle = moveColor(mover.get(p.role)); g.lineWidth = 2; g.stroke(); }
     }
@@ -876,6 +973,57 @@
         <span class="bars" title="space left per second: first 15 min vs last block"><i style="width:${(r.baseG / max * 100).toFixed(0)}%"></i><i class="now" style="width:${(r.gap / max * 100).toFixed(0)}%"></i></span>
         <em>${r.ratio.toFixed(1)}×</em></div>`;
     }).join('') : '<p class="empty">The first blocks of this half are the baseline: leaks show from minute 15 of the half.</p>';
+  }
+
+  // ================================================================== live Shadow ratings (FotMob-style card)
+  // Per position, from kick-off to now: 6.5 + movement without the ball (mean Shadow score vs 55,
+  // the match average; random = 50) + dangerous space held (mean contribution vs the average for the
+  // position family in this match). Shown on the coach's own line-up card, both teams.
+  function shadowRatings(f) {
+    const nowMin = Math.floor((f - meta.half_start) / meta.fps / 60) + (meta.half === 2 ? 45 : 0), acc = {};
+    for (const [team, li, half, minute, n, score, contrib] of C.ratings || []) {
+      if (half > meta.half || (half === meta.half && minute >= nowMin)) continue;    // completed minutes only
+      const k = team + ':' + labels[li], a = acc[k] || (acc[k] = { n: 0, score: 0, contrib: 0 });
+      a.n += n; a.score += score; a.contrib += contrib;
+    }
+    const out = {};
+    for (const [k, a] of Object.entries(acc)) {
+      if (a.n < 60) continue;
+      const ref = (C.rating_ref || {})[k.split(':')[1]] || 10;
+      const move = Math.max(-1.8, Math.min(1.8, (a.score / a.n - 55) * 0.45));
+      const space = Math.max(-1.2, Math.min(1.2, (a.contrib / a.n / ref - 1) * 1.2));
+      out[k] = { rating: Math.max(3, Math.min(10, 6.5 + move + space)), score: a.score / a.n, held: a.contrib / a.n / ref, n: a.n };
+    }
+    return out;
+  }
+  const rateColor = (r) => (r >= 7 ? COL.ok : r >= 6 ? COL.warn : COL.bad);
+  let luKey = '';
+  function lineupCard(f) {
+    if (narrow() || !C.ratings) { if (!C.ratings && $('luCard')) $('luCard').hidden = true; return; }
+    const R = shadowRatings(f); S.ratings = R;
+    const key = Object.entries(R).map(([k, v]) => k + v.rating.toFixed(1)).join('|') + lineup.formation + oppFormation() + JSON.stringify(lineup.opp ? lineup.opp.xi : 0);
+    if (key === luKey) return; luKey = key;
+    const opp = lineup.oppName || meta.teams.A, html = [];
+    const team = (t) => {
+      const form = t === 'H' ? lineup.formation : oppFormation(), slotRole = {};
+      for (const [role, slot] of Object.entries(roleToSlot[t])) slotRole[slot] = role;
+      const vals = [];
+      for (const s of D.slots(form)) {
+        const role = slotRole[s.label], r = role && R[`${t}:${role}`], p = t === 'H' ? player(lineup.xi[s.label]) : lineup.opp && lineup.opp.xi[s.label];
+        // ours from the bottom (attacking up), theirs from the top
+        const left = t === 'H' ? 8 + s.x * 84 : 92 - s.x * 84, top = t === 'H' ? 95 - s.y * 42 : 5 + s.y * 42;
+        if (r) vals.push(r.rating);
+        const name = p ? shortName(p) : s.label;
+        html.push(`<div class="lp" style="left:${left}%;top:${top}%" title="${esc(name)} · ${s.label}${r ? ` · Shadow score ${Math.round(r.score)} · space held ${r.held.toFixed(2)}×` : ''}">
+          <span class="ph" style="--kit:var(--${t === 'H' ? 'home' : 'away'});${p && p.photo ? `background-image:url(${p.photo})` : ''}">${p && p.photo ? '' : (p && p.num != null ? p.num : s.label)}
+          ${r ? `<span class="rt" style="background:${rateColor(r.rating)}">${r.rating.toFixed(1)}</span>` : ''}</span><span class="nm">${esc(name)}</span></div>`);
+      }
+      return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+    };
+    const avgH = team('H'), avgA = team('A');
+    const tag = (name, avg) => `${esc(name)}${avg != null ? `<em style="background:${rateColor(avg)}">${avg.toFixed(1)}</em>` : ''}`;
+    $('luTop').innerHTML = tag(opp.split(' ')[0], avgA); $('luBot').innerHTML = tag(meta.teams.H, avgH);
+    $('luLive').innerHTML = html.join('');
   }
 
   // ================================================================== simulation cards (Attack / Defend)
@@ -1246,7 +1394,7 @@
     if (S.sel && !S.sel.startsWith(S.team + ':')) S.sel = null;
     const max = Math.max(1, ...rows.map((r) => r.v[0]));
     $('plist').innerHTML = rows.map((r) => {
-      const pl = S.team === 'H' ? roleToPlayer[r.role] : null, s = fat[r.k], lvl = s && s.half === meta.half ? s.level : 'no data';
+      const pl = S.team === 'H' ? roleToPlayer[r.role] : oppToPlayer[r.role], s = fat[r.k], lvl = s && s.half === meta.half ? s.level : 'no data';
       const kmh = speed[r.k];
       return `<button type="button" class="prow${S.sel === r.k ? ' sel' : ''}" data-k="${r.k}" style="--kit:var(--${S.team === 'H' ? 'home' : 'away'})">
         ${avatar(pl, S.team, r.role)}
@@ -1262,7 +1410,7 @@
   function detail(rows, fat, si, force) {
     const k = S.sel || (rows[0] && rows[0].k); if (!k) return;
     const role = k.split(':')[1], team = k[0], arr = C.seconds.movement[k]; if (!arr) return;
-    const v = arr[si], pl = team === 'H' ? roleToPlayer[role] : null, s = fat[k];
+    const v = arr[si], pl = team === 'H' ? roleToPlayer[role] : oppToPlayer[role], s = fat[k];
     $('pdStats').innerHTML = `<div class="pd-name"><b>${esc(pl ? pl.name : role)}</b><span>${role} · ${team === 'H' ? meta.teams.H : (lineup.oppName || meta.teams.A)}</span></div>
       <div><b>${fmt1(v[0] / 1000)}</b><span>km since kick-off</span></div><div><b>${fmt1(v[3])}</b><span>top km/h</span></div>
       <div><b>${v[2]}</b><span>sprints</span></div><div><b style="color:${s ? LEVEL[s.level] : 'inherit'}">${s && s.risk != null ? s.risk : '–'}</b><span>fatigue risk</span></div>`;
@@ -1681,7 +1829,7 @@
   let last = performance.now(), lastPanel = -1;
   function panels(force) {
     const st = interp(S.t), f = videoFrame(S.t), si = Math.max(0, Math.min(C.seconds.frames.length - 1, Math.floor(S.t)));
-    squad(st, f, si, force); strip(f); advice(st); pressingCard(f); leakCard(f); simCards();
+    squad(st, f, si, force); strip(f); advice(st); pressingCard(f); leakCard(f); lineupCard(f); simCards();
     if (!narrow()) { feed(f); fatigueMap(f); stats(f, si); momentumChart(f); channels(f, st); setPieces(f); duels(st); }
     planCard(f);
     postSnapshot(f);

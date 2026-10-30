@@ -321,10 +321,37 @@ def test_shadow_block_moments_and_rows():
                [1900, "A", 30.0]]          # denial normal in the 10 s before: not a moment
     out = demo.shadow_block(players, teams, entries, {"RB": 0, "LB": 1}, 1000, 2000, [[0.1]])
     assert len(out["moments"]) == 1
-    entry, low, defender, denial, top = out["moments"][0]
-    assert (entry, low, defender, denial) == (1600, 1500, "H", 300.0)
+    entry, low, defender, denial, top, kind = out["moments"][0]
+    assert (entry, low, defender, denial, kind) == (1600, 1500, "H", 300.0, "denial")
     assert top[0][:2] == [0, 40.0]
     i = out["teams"].index(next(r for r in out["teams"] if r[0] == 1500))
     assert [p[2] for p in out["players"][i]] == [0]          # LB's 2-per-mille gap is dropped
     assert out["usual"]["H"] == 800.0 and out["usual"]["A"] is None
     assert demo.shadow_block(None, None, entries, {}, 1000, 2000, None) is None
+
+
+def test_shadow_block_rest_moment_replaces_denial():
+    """A lost ball that ends in a final-third entry, with thin rest defence just before the loss,
+    is a 'rest' moment: its movers are the cover positions of the team that lost the ball."""
+    import pandas as pd
+    from sb import demo
+    frames = list(range(1000, 1000 + 40 * 25, 25))
+    poss = ["H" if f < 1500 else "A" for f in frames]
+    teams = pd.DataFrame({"frame": frames, "half": 1, "possession": poss,
+                          "J_H": [800.0 if p == "H" else (300.0 if f == 1550 else 800.0) for f, p in zip(frames, poss)],
+                          "J_A": 200.0, "gap_H": 0.0, "gap_A": 0.0,
+                          "rest": [(500.0 if f == 1475 else 900.0) if p == "H" else np.nan for f, p in zip(frames, poss)],
+                          "behind": 3})
+    players = pd.DataFrame([
+        {"frame": 1475, "half": 1, "slot": 3, "team": "H", "label": "RB", "phase": "with ball", "contribution": 1.0, "gain": 0.0,
+         "best_gain": 1.0, "gap": 1.0, "shadow_score": 50.0, "shadow_x": 50.0, "shadow_y": 60.0, "x": 50.0, "y": 60.0,
+         "rest_gap": 30.0, "cover_x": 45.0, "cover_y": 58.0}])
+    transitions = pd.DataFrame({"frame": [1500], "won_by": ["A"]})
+    out = demo.shadow_block(players, teams, [[1600, "A", 30.0]], {"RB": 0}, 1000, 2000, None, transitions)
+    assert len(out["moments"]) == 1
+    entry, low, team, value, top, kind = out["moments"][0]
+    assert (entry, low, team, value, kind) == (1600, 1475, "H", 500.0, "rest")
+    assert top == [[0, 30.0, 50.0, 60.0, 45.0, 58.0]]
+    assert out["usual_rest"]["H"] == 900.0
+    row = out["players"][[r[0] for r in out["teams"]].index(1475)][0]
+    assert row[10:] == [30.0, 45.0, 58.0]                     # kept for its rest gap although gap < 5

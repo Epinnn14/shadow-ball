@@ -213,7 +213,8 @@ def build(track, labels, ball, sigma, source, role_df, tactics_dir, minute_from=
     running = team_running(pd.read_parquet(os.path.join(tactics_dir, "movement.parquet")))
 
     ob_players, ob_teams, surface = load_offball(tactics_dir)
-    shadow = shadow_block(ob_players, ob_teams, entries, label_idx, first, last, surface)
+    shadow = shadow_block(ob_players, ob_teams, entries, label_idx, first, last, surface,
+                          pd.read_parquet(os.path.join(tactics_dir, "transitions.parquet")))
 
     with open(os.path.join(tactics_dir, "formations.json")) as handle:
         formations = json.load(handle)
@@ -388,56 +389,93 @@ MOMENT_PCT = 35                      # ... and kept when denial fell into the de
 GAP_MIN = 5.0                        # per-mille: shadow rows below this are dropped (the app never draws them)
 
 
-def shadow_block(players, teams, entries, label_idx, first, last, surface):
+def _num(v, nd=1):
+    return None if v is None or (isinstance(v, float) and np.isnan(v)) else round(float(v), nd)
+
+
+def shadow_block(players, teams, entries, label_idx, first, last, surface, transitions=None):
     """Shadow Ball's core in the clip: the off-ball model (sb/offball.py) once per second.
 
-    teams    [frame, possession, J_H, J_A, gap_H, gap_A] in per-mille of the dangerous space;
-             the team WITHOUT the ball 'denies' its J.
+    teams    [frame, possession, J_H, J_A, gap_H, gap_A, rest, behind] in per-mille of the dangerous
+             space; the team WITHOUT the ball 'denies' its J; rest = rest defence of the team WITH it.
     players  aligned with teams: [slot, team (0/1), label idx, without ball (1/0), gap, Shadow score,
-             shadow x, y, x, y] (raw camera frame), only rows with a gap >= GAP_MIN.
-    usual    each team's median space denial while defending, from kick-off to the end of the clip.
-    moments  Shadow Replay: before every final-third entry up to the end of the clip, the second in
-             the previous 10 s where the defending team denied the least, kept when that is among
-             its lowest 35%: [entry frame, low frame, defending team, denial, top 3 movers
-             [label idx, gap, x, y, shadow x, shadow y]].
+             shadow x, y, x, y, rest gap, cover x, cover y] (raw camera frame), only rows with a gap or
+             a rest gap >= GAP_MIN.
+    usual    each team's median space denial while defending, from kick-off to the end of the clip;
+             usual_rest the same for rest defence while in possession.
+    moments  Shadow Replay, up to the end of the clip: [entry frame, low frame, team that suffered,
+             value, top 3 movers [label idx, gap, x, y, to x, to y], kind]
+             kind 'denial': before a final-third entry, the second in the previous 10 s where the
+               defending team denied the least, kept when among its lowest 35% (movers: shadows);
+             kind 'rest': a lost ball that ended in a final-third entry within 10 s, when rest defence
+               in the second before the loss was below the team's median (movers: cover positions).
+               It replaces a 'denial' moment for the same entry: losing the ball came first.
     surface  the learned threat surface (5 m cells, attacking frame) to paint dangerous space."""
     if players is None or teams is None or not len(teams):
         return None
+    has_rest = "rest" in teams.columns and "rest_gap" in players.columns
     teams = teams[teams.frame <= last].sort_values("frame")
     players = players[players.frame <= last]
     denial = np.where(teams.possession == "H", teams.J_A, teams.J_H)
     defending = np.where(teams.possession == "H", "A", "H")
-    usual, cut = {}, {}
+    usual, usual_rest, cut = {}, {}, {}
     for team in ("H", "A"):
         d = denial[defending == team]
         usual[team] = round(float(np.median(d)), 1) if len(d) else None
         cut[team] = float(np.percentile(d, MOMENT_PCT)) if len(d) else -1
+        r = teams.rest[teams.possession == team].dropna() if has_rest else []
+        usual_rest[team] = round(float(np.median(r)), 1) if len(r) else None
 
-    def rows_at(frame, team=None):
+    def rows_at(frame, team):
         g = players[players.frame == frame]
-        return g if team is None else g[g.team == team]
+        return g[g.team == team]
+
+    def movers(g, col, x, y):
+        return [[label_idx.get(r.label, -1), round(float(getattr(r, col)), 1), round(float(r.x), 1), round(float(r.y), 1),
+                 round(float(getattr(r, x)), 1), round(float(getattr(r, y)), 1)] for r in g.itertuples()]
+
+    tf, poss = teams.frame.to_numpy(), teams.possession.to_numpy()
+    rest_moments = {}
+    if has_rest and transitions is not None:
+        for r in transitions[transitions.frame <= last].itertuples():
+            loser = "A" if r.won_by == "H" else "H"
+            entry = next((e for e, team, _ in entries if team == r.won_by and r.frame < e <= r.frame + MOMENT_LOOKBACK), None)
+            sel = np.where((tf >= r.frame - 4 * paths.FPS) & (tf <= r.frame - paths.FPS // 2) & (poss == loser))[0]
+            if entry is None or entry > last or not len(sel):
+                continue
+            i = sel[-1]
+            value = float(teams.rest.iloc[i])
+            if np.isnan(value) or usual_rest[loser] is None or value > usual_rest[loser]:
+                continue
+            g = rows_at(int(tf[i]), loser)
+            g = g[g.phase == "with ball"].dropna(subset=["rest_gap"]).sort_values("rest_gap", ascending=False).head(3)
+            rest_moments[int(entry)] = [int(entry), int(tf[i]), loser, round(value, 1),
+                                        movers(g, "rest_gap", "cover_x", "cover_y"), "rest"]
 
     moments = []
-    tf = teams.frame.to_numpy()
     for entry, attacker, _ in entries:
         if entry > last:
             continue
+        if entry in rest_moments:
+            moments.append(rest_moments[entry])
+            continue
         defender = "A" if attacker == "H" else "H"
-        sel = (tf >= entry - MOMENT_LOOKBACK) & (tf < entry) & (teams.possession.to_numpy() == attacker)
+        sel = (tf >= entry - MOMENT_LOOKBACK) & (tf < entry) & (poss == attacker)
         if sel.sum() < 3:
             continue
         i = np.where(sel)[0][np.argmin(denial[sel])]
         if denial[i] >= cut[defender]:
             continue
         low = int(tf[i])
-        top = rows_at(low, defender)
-        top = top[top.phase == "without ball"].sort_values("gap", ascending=False).head(3)
-        moments.append([int(entry), low, defender, round(float(denial[i]), 1),
-                        [[label_idx.get(r.label, -1), round(float(r.gap), 1), round(float(r.x), 1), round(float(r.y), 1),
-                          round(float(r.shadow_x), 1), round(float(r.shadow_y), 1)] for r in top.itertuples()]])
+        g = rows_at(low, defender)
+        g = g[g.phase == "without ball"].sort_values("gap", ascending=False).head(3)
+        moments.append([int(entry), low, defender, round(float(denial[i]), 1), movers(g, "gap", "shadow_x", "shadow_y"), "denial"])
 
     clip_t = teams[(teams.frame >= first) & (teams.frame <= last)]
-    clip_p = players[(players.frame >= first) & (players.gap >= GAP_MIN)]
+    keep = players.gap >= GAP_MIN
+    if has_rest:
+        keep |= players.rest_gap.fillna(0) >= GAP_MIN
+    clip_p = players[(players.frame >= first) & keep]
     by_frame = {f: g for f, g in clip_p.groupby("frame")}
     rows = []
     for f in clip_t.frame:
@@ -445,10 +483,14 @@ def shadow_block(players, teams, entries, label_idx, first, last, surface):
         rows.append([] if g is None else [
             [int(r.slot), 0 if r.team == "H" else 1, label_idx.get(r.label, -1), int(r.phase == "without ball"),
              round(float(r.gap), 1), int(round(r.shadow_score)), round(float(r.shadow_x), 1), round(float(r.shadow_y), 1),
-             round(float(r.x), 1), round(float(r.y), 1)] for r in g.itertuples()])
+             round(float(r.x), 1), round(float(r.y), 1),
+             _num(getattr(r, "rest_gap", None)), _num(getattr(r, "cover_x", None)), _num(getattr(r, "cover_y", None))]
+            for r in g.itertuples()])
     return {"teams": [[int(r.frame), r.possession, round(float(r.J_H), 1), round(float(r.J_A), 1),
-                       round(float(r.gap_H), 1), round(float(r.gap_A), 1)] for r in clip_t.itertuples()],
-            "players": rows, "usual": usual, "moments": moments,
+                       round(float(r.gap_H), 1), round(float(r.gap_A), 1),
+                       _num(getattr(r, "rest", None)), None if getattr(r, "behind", None) is None else int(r.behind)]
+                      for r in clip_t.itertuples()],
+            "players": rows, "usual": usual, "usual_rest": usual_rest, "moments": moments,
             "surface": None if surface is None else np.round(np.asarray(surface), 3).tolist(), "surface_cell": 5.0}
 
 

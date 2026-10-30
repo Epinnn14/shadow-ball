@@ -344,13 +344,18 @@
   function shadowSnapshot(f) {
     if (!SH.rows.length) return null;
     const i = shIdx(f), row = i >= 0 ? SH.rows[i] : null, r = shRecent(f, 120);
-    const moves = (i >= 0 ? shMoves(i) : []).map((m) => ({ player: nameOf(m.role), role: m.role, move: moveText(m), gain_pct: Math.round(m.gap) / 10 }));
+    const out = (m) => ({ player: nameOf(m.role), role: m.role, move: moveText(m), gain_pct: Math.round(m.gap) / 10, kind: m.kind });
     return { our_share_of_dangerous_space_pct: row ? Math.round(row[2]) / 10 : null, phase: row ? (row[1] === 'A' ? 'defending' : 'attacking') : null,
              usual_space_denied_pct: SH.usual.H != null ? Math.round(SH.usual.H) / 10 : null,
-             space_denied_last_2min_pct: r ? Math.round(r.avg) / 10 : null, most_often_out_of_position: r && r.who ? nameOf(r.who) : null,
-             moves_now: moves,
-             replays: SH.moments.filter((m) => m[2] === 'H' && m[0] <= f).map((m) => ({ clock: clockText(m[1]), space_denied_pct: Math.round(m[3]) / 10,
-               moves: m[4].map(([li, gap, x, y, sx, sy]) => { const mv = toMove(labels[li], gap, x, y, sx, sy); return { player: nameOf(mv.role), role: mv.role, move: moveText(mv), gain_pct: Math.round(gap) / 10 }; }) })) };
+             rest_defence_pct: row && row[1] === 'H' && row[6] != null ? Math.round(row[6]) / 10 : null,
+             usual_rest_defence_pct: SH.usualRest.H != null ? Math.round(SH.usualRest.H) / 10 : null,
+             rest_defence_thin: !!restThin(row),
+             space_denied_last_2min_pct: r && r.avg != null ? Math.round(r.avg) / 10 : null,
+             rest_defence_last_2min_pct: r && r.rest != null ? Math.round(r.rest) / 10 : null,
+             most_often_out_of_position: r && r.who ? nameOf(r.who) : null, most_often_out_of_cover: r && r.cover ? nameOf(r.cover) : null,
+             moves_now: (i >= 0 ? liveMoves(i) : []).map(out),
+             replays: SH.moments.filter((m) => m[2] === 'H' && m[0] <= f).map((m) => ({ clock: clockText(m[1]), kind: m[5] === 'rest' ? 'lost the ball, thin rest defence' : 'space denied low',
+               value_pct: Math.round(m[3]) / 10, moves: momentMoves(m).map(out) })) };
   }
   function sync() {
     if (S.follow) {
@@ -516,18 +521,20 @@
   }
 
   // ================================================================== Shadow pitch (the core)
-  // sb/offball.py once per second: the share of the dangerous space we own (space denied while
-  // they have the ball) and, for each off-ball player, the best position he could have reached in
-  // that second. The live pitch stays clean; this pitch shows what SHOULD be. Only moves worth
-  // SH_MIN per mille of the dangerous space, already there a second earlier (no flicker), max 3.
-  const SH_MIN = 15;
-  const SH = { rows: [], frames: [], players: [], usual: {}, moments: [], surf: null, cell: 5 };
+  // sb/offball.py once per second. Without the ball: the share of OUR dangerous space we own (space
+  // denied) and, for each off-ball player, the best position he could have reached in that second.
+  // With the ball: the share of their dangerous space we own, the best moves to get open, and REST
+  // DEFENCE: the share of our own dangerous space we would still own if we lost the ball right now;
+  // when it is thin, the cover moves are shown instead. The live pitch stays clean; this pitch shows
+  // what SHOULD be. Only moves worth SH_MIN per mille, already there a second earlier (no flicker).
+  const SH_MIN = 15, REST_THIN = 80;           // per mille: rest defence this far under usual = thin
+  const SH = { rows: [], frames: [], players: [], usual: {}, usualRest: {}, moments: [], surf: null, cell: 5 };
   let shV, shKey = '', shPaint = null, replay = null, prevF = null;
   function initShadow() {
     const s = C.shadow;
     if (!s || !s.teams.length) { $('shadowCard').hidden = true; return; }
     Object.assign(SH, { rows: s.teams, frames: s.teams.map((r) => r[0]), players: s.players, usual: s.usual,
-                        surf: s.surface, cell: s.surface_cell || 5 });
+                        usualRest: s.usual_rest || {}, surf: s.surface, cell: s.surface_cell || 5 });
     // replayable moments: the low point is inside the clip
     SH.moments = s.moments.filter((m) => m[1] >= meta.first && m[0] <= meta.last);
     for (const m of SH.moments) C.events.push({ frame: m[0], kind: 'shadow', team: m[2], m });
@@ -537,24 +544,39 @@
     while (lo <= hi) { const mid = (lo + hi) >> 1; if (SH.frames[mid] <= f) { ans = mid; lo = mid + 1; } else hi = mid - 1; }
     return ans >= 0 && f - SH.frames[ans] <= 3 * meta.fps ? ans : -1;
   }
-  const toMove = (role, gap, x, y, sx, sy) => { const [X, Y] = tf(x, y), [SX, SY] = tf(sx, sy); return { role, gap, x: X, y: Y, sx: SX, sy: SY }; };
-  function shMoves(i, team = 'H') {
+  const toMove = (role, gap, x, y, sx, sy, kind = 'shadow', team = 'H') => { const [X, Y] = tf(x, y), [SX, SY] = tf(sx, sy); return { role, gap, x: X, y: Y, sx: SX, sy: SY, kind, team }; };
+  const momentMoves = (m) => m[4].filter((t) => t[1] >= SH_MIN / 3)
+    .map(([li, gap, x, y, sx, sy]) => toMove(labels[li], gap, x, y, sx, sy, m[5] === 'rest' ? 'cover' : 'shadow', m[2]));
+  // kind 'shadow': best position for the current phase; 'cover': best position for the rest defence
+  const COLS = { shadow: { gap: 4, x: 6, y: 7 }, cover: { gap: 10, x: 11, y: 12 } };
+  function shMoves(i, team = 'H', kind = 'shadow', n = 3) {
     if (i < 0) return [];
-    const t = team === 'H' ? 0 : 1;
+    const t = team === 'H' ? 0 : 1, c = COLS[kind];
     const prev = i > 0 && SH.frames[i] - SH.frames[i - 1] <= 2 * meta.fps ? SH.players[i - 1] : null;
-    return SH.players[i].filter((p) => p[1] === t && p[4] >= SH_MIN && (!prev || prev.some((q) => q[1] === t && q[2] === p[2] && q[4] >= SH_MIN / 2)))
-      .sort((a, b) => b[4] - a[4]).slice(0, 3).map((p) => toMove(labels[p[2]], p[4], p[8], p[9], p[6], p[7]));
+    return SH.players[i].filter((p) => p[1] === t && p[c.gap] != null && p[c.gap] >= SH_MIN &&
+        (!prev || prev.some((q) => q[1] === t && q[2] === p[2] && q[c.gap] != null && q[c.gap] >= SH_MIN / 2)))
+      .sort((a, b) => b[c.gap] - a[c.gap]).slice(0, n).map((p) => toMove(labels[p[2]], p[c.gap], p[8], p[9], p[c.x], p[c.y], kind, team));
+  }
+  const restThin = (row) => row && row[1] === 'H' && row[6] != null && SH.usualRest.H != null && row[6] < SH.usualRest.H - REST_THIN;
+  // what the Shadow pitch shows at row i: thin rest defence -> 2 cover moves + the best attacking one
+  function liveMoves(i) {
+    if (i < 0) return [];
+    if (!restThin(SH.rows[i])) return shMoves(i);
+    const cover = shMoves(i, 'H', 'cover', 2), roles = new Set(cover.map((m) => m.role));
+    return cover.concat(shMoves(i).filter((m) => !roles.has(m.role)).slice(0, 1));
   }
   function moveText(m) {
-    const dx = m.sx - m.x, dy = m.sy - m.y, parts = [];
+    const s = m.team === 'A' ? -1 : 1, dx = s * (m.sx - m.x), dy = s * (m.sy - m.y), parts = [];   // in that team's own direction
     if (Math.abs(dx) >= 1) parts.push(`${Math.round(Math.abs(dx))} m ${dx < 0 ? 'deeper' : 'higher'}`);
     if (Math.abs(dy) >= 1) parts.push(`${Math.round(Math.abs(dy))} m ${dy < 0 ? 'left' : 'right'}`);
     return parts.join(', ') || 'hold';
   }
   const pctM = (permille) => Math.round(permille / 10) + '%';
   const nameFor = (team, role) => (team === 'H' ? nameOf(role) : `${(lineup.oppName || meta.teams.A).split(' ')[0]} ${role}`);
+  const moveColor = (m) => (m.kind === 'cover' ? COL.warn : COL.shadow);
 
-  // the model's control (same as sb/offball.py, players standing) x threat, painted per 3 m cell
+  // the model's control (same as sb/offball.py, players standing) x threat, painted per 3 m cell.
+  // `poss` = the team whose attack the threat is valued for.
   const REACT = 0.7, VMAX = 5, SOFT = 0.3, TEMP = 0.45;
   function dangerCells(ps, poss, ball) {
     if (!SH.surf || (poss !== 'H' && poss !== 'A') || !ps.length) return null;
@@ -576,19 +598,19 @@
       return [x, y, col >> 16, (col >> 8) & 255, col & 255, a];
     });
   }
-  const rowState = (i) => frameState(SH.frames[i]);     // players + ball at an evaluated second
   function frameState(frame) {
     const fi = Math.max(0, Math.min(nFrames - 1, Math.round((frame - meta.first) / (meta.fps / meta.sample_fps))));
     const b = C.frames[fi][2]; let ball = null;
     if (b) { const [X, Y] = tf(b[0], b[1]); ball = { x: X, y: Y, model: b[2] === 1, sigma: b[3] }; }
     return { ps: framePlayers(fi), ball };
   }
+  const rowState = (i) => frameState(SH.frames[i]);     // players + ball at an evaluated second
 
   function drawShadowPitch(ps, ball, moves, alphaOf, team) {
     const v = shV, g = v.ctx; v.begin();
     if (shPaint) paintCells(v, shPaint);
-    const r = Math.max(5.5, 0.95 * v.sc), mover = new Set(moves.map((m) => m.role));
-    for (const p of ps) {           // their players small and dim, ours solid; movers get the arrow
+    const r = Math.max(5.5, 0.95 * v.sc), mover = new Map(moves.map((m) => [m.role, m]));
+    for (const p of ps) {           // their players small and dim, ours solid; movers get a ring
       const [a, b] = v.S(p.x, p.y), ours = p.team === team;
       g.beginPath(); g.arc(a, b, ours ? r : r * 0.8, 0, 7);
       g.fillStyle = hexA(p.team === 'H' ? lineup.kitH : lineup.kitA, ours ? 0.95 : 0.5); g.fill();
@@ -598,17 +620,19 @@
         g.fillStyle = '#fff'; g.font = `700 ${Math.round(r * 0.9)}px ${CSS.getPropertyValue('--mono')}`; g.textAlign = 'center'; g.textBaseline = 'middle';
         g.fillText(pl ? String(pl.num) : '', a, b + 0.5);
       }
-      if (ours && mover.has(p.role)) { g.beginPath(); g.arc(a, b, r + 3, 0, 7); g.strokeStyle = COL.shadow; g.lineWidth = 2; g.stroke(); }
+      if (ours && mover.has(p.role)) { g.beginPath(); g.arc(a, b, r + 3, 0, 7); g.strokeStyle = moveColor(mover.get(p.role)); g.lineWidth = 2; g.stroke(); }
     }
     for (const m of moves) {
       const al = alphaOf(m); if (al <= 0.02) continue;
+      const col = moveColor(m);
       g.save(); g.globalAlpha = al;
       const [a, b] = v.S(m.sx, m.sy);
-      g.beginPath(); g.arc(a, b, r, 0, 7); g.fillStyle = 'rgba(167,139,250,.22)'; g.fill();
-      g.setLineDash([3, 3]); g.strokeStyle = '#D9CCFF'; g.lineWidth = 1.6; g.stroke(); g.setLineDash([]);
+      g.beginPath(); g.arc(a, b, r, 0, 7); g.fillStyle = hexA(col, 0.22); g.fill();
+      g.setLineDash([3, 3]); g.strokeStyle = m.kind === 'cover' ? '#FDE7A8' : '#D9CCFF'; g.lineWidth = 1.6; g.stroke(); g.setLineDash([]);
       const d = Math.hypot(m.sx - m.x, m.sy - m.y);
-      if (d > 1.2) { const k = (d - r / v.sc - 0.2) / d; v.arrow(m.x, m.y, m.x + (m.sx - m.x) * k, m.y + (m.sy - m.y) * k, COL.shadow, 2.6); }
-      v.label(`${nameFor(team, m.role)} +${fmt1(m.gap / 10)}%`, m.sx, m.sy, -(r + 11), { size: 10.5, bg: 'rgba(30,18,60,.85)' });
+      if (d > 1.2) { const k = (d - r / v.sc - 0.2) / d; v.arrow(m.x, m.y, m.x + (m.sx - m.x) * k, m.y + (m.sy - m.y) * k, col, 2.6); }
+      v.label(`${nameFor(team, m.role)}${m.kind === 'cover' ? ' cover' : ''} +${fmt1(m.gap / 10)}%`, m.sx, m.sy, -(r + 11),
+              { size: 10.5, bg: m.kind === 'cover' ? 'rgba(60,40,5,.88)' : 'rgba(30,18,60,.85)' });
       g.restore();
     }
     if (ball) drawBall(v, ball, true);
@@ -616,16 +640,18 @@
 
   function moveCards(moves, team) {
     if (!moves.length) return '<p class="empty">No move worth calling: every player is within reach of his best spot.</p>';
-    return moves.map((m) => { const pl = team === 'H' ? roleToPlayer[m.role] : null; return `<div class="mv">${avatar(pl, team, m.role)}
-      <span class="who"><b>${esc(team === 'H' ? nameOf(m.role) : nameFor(team, m.role))}</b><span>${m.role} · ${esc(moveText(m))}</span></span><em>+${fmt1(m.gap / 10)}%</em></div>`; }).join('');
+    return moves.map((m) => { const pl = team === 'H' ? roleToPlayer[m.role] : null; return `<div class="mv${m.kind === 'cover' ? ' cover' : ''}">${avatar(pl, team, m.role)}
+      <span class="who"><b>${esc(team === 'H' ? nameOf(m.role) : nameFor(team, m.role))}</b><span>${m.role} · ${m.kind === 'cover' ? 'cover: ' : ''}${esc(moveText(m))}</span></span><em>+${fmt1(m.gap / 10)}%</em></div>`; }).join('');
   }
 
+  function setKpi(id, value, cls, sub) { const el = $(id); el.textContent = value; el.className = cls || ''; if (sub != null) $(id + 'U').textContent = sub; }
   function shadowKpis(i) {
-    const row = SH.rows[i], ours = row[2], defending = row[1] === 'A', u = SH.usual.H;
+    const row = SH.rows[i], ours = row[2], defending = row[1] === 'A', u = SH.usual.H, ur = SH.usualRest.H;
     $('shDenK').textContent = defending ? 'Space denied' : 'Space owned';
-    const el = $('shDen'); el.textContent = pctM(ours);
-    el.className = defending && u ? (ours < u - 100 ? 'bad' : ours < u - 50 ? 'warn' : '') : '';
-    $('shUsual').textContent = defending && u ? `usual ${pctM(u)}` : 'of the dangerous space';
+    setKpi('shDen', pctM(ours), defending && u ? (ours < u - 100 ? 'bad' : ours < u - 50 ? 'warn' : '') : '',
+           defending && u ? `usual ${pctM(u)}` : 'of their dangerous space');
+    if (!defending && row[6] != null) setKpi('shRest', pctM(row[6]), restThin(row) ? 'warn' : '', ur ? `if lost now · usual ${pctM(ur)}` : 'if lost now');
+    else setKpi('shRest', '–', '', 'while we have the ball');
     $('shGap').textContent = String(SH.moments.filter((m) => m[2] === 'H' && m[0] <= SH.frames[i]).length);
     // sparkline: our share of the dangerous space over the last 2 minutes (dashed: usual while defending)
     const c = $('shSpark'), w = c.clientWidth, h = 40, d = window.devicePixelRatio || 1; if (!w) return;
@@ -644,18 +670,20 @@
     const f = videoFrame(S.t), i = shIdx(f);
     if (i < 0) {
       if (shKey !== 'none') { shKey = 'none'; shPaint = null; const { ps, ball } = frameState(f); drawShadowPitch(ps, ball, [], () => 0, 'H');
-        $('shMoves').innerHTML = '<p class="empty">Dead ball or no tracking: the model waits for play.</p>'; $('shCalm').hidden = true; $('shDen').textContent = '–'; }
+        $('shMoves').innerHTML = '<p class="empty">Dead ball or no tracking: the model waits for play.</p>'; $('shCalm').hidden = true; $('shWarn').hidden = true;
+        setKpi('shDen', '–'); setKpi('shRest', '–'); }
       return;
     }
-    // glide from the previous evaluated second to this one over 0.4 s; arrows fade in
+    // glide from the previous evaluated second to this one over 0.4 s; new arrows fade in
     const k = S.playing ? Math.min(1, (f - SH.frames[i]) / (0.4 * meta.fps)) : 1;
-    const cur = rowState(i), moves = shMoves(i);
+    const cur = rowState(i), moves = liveMoves(i), thin = restThin(SH.rows[i]);
     if (shKey !== 'r' + i) {
       shKey = 'r' + i;
-      shPaint = dangerCells(cur.ps, SH.rows[i][1], cur.ball);
+      // thin rest defence: paint OUR dangerous space (valued for their attack), where the cover is needed
+      shPaint = dangerCells(cur.ps, thin ? 'A' : SH.rows[i][1], cur.ball);
       shadowKpis(i);
       $('shMoves').innerHTML = moveCards(moves, 'H');
-      $('shCalm').hidden = !!moves.length;
+      $('shCalm').hidden = !!moves.length || thin; $('shWarn').hidden = !thin;
       S.shadowNow = { i, moves };
     }
     const prev = i > 0 && SH.frames[i] - SH.frames[i - 1] <= 2 * meta.fps ? rowState(i - 1) : null;
@@ -664,31 +692,36 @@
       const pm = new Map(prev.ps.map((p) => [p.k, p]));
       ps = cur.ps.map((p) => { const q = pm.get(p.k); return q ? Object.assign({}, p, { x: q.x + (p.x - q.x) * k, y: q.y + (p.y - q.y) * k }) : p; });
     }
-    // a move that was already called a second ago stays solid; only new ones fade in
-    const before = new Set(prev ? shMoves(i - 1).map((m) => m.role) : []);
-    drawShadowPitch(ps, cur.ball, moves, (m) => (before.has(m.role) ? 1 : k), 'H');
+    // a move already called a second ago stays solid; only new ones fade in
+    const before = new Set(prev ? liveMoves(i - 1).map((m) => m.kind + m.role) : []);
+    drawShadowPitch(ps, cur.ball, moves, (m) => (before.has(m.kind + m.role) ? 1 : k), 'H');
   }
 
   // ---------------------------------------------------------------- Shadow Replay
-  // Fires live when the opponent enters our final third and, in the 10 s before, our space denial
-  // dropped into its lowest 35% (sb/demo.py). Freezes the Shadow pitch on that second for 7 s.
+  // Fires live when the opponent enters our final third and either (denial) in the 10 s before, our
+  // space denial dropped into its lowest 35%, or (rest) we had just lost the ball with our rest
+  // defence below its usual (sb/demo.py). Freezes the Shadow pitch on that second for 7 s.
   function openReplay(m) {
-    replay = { m, start: performance.now(), until: performance.now() + 7000, drawn: false };
+    replay = { m, start: performance.now(), until: performance.now() + 7000 };
     $('shadowCard').classList.add('replay');
-    if (narrow()) { shV.layout($('shadowPitch').parentElement.clientWidth); }
-    const [entry, low, team, denial, top] = m, opp = (lineup.oppName || meta.teams.A).split(' ')[0];
-    const moves = top.filter((t) => t[1] >= SH_MIN / 3).map(([li, gap, x, y, sx, sy]) => toMove(labels[li], gap, x, y, sx, sy));
-    const ours = team === 'H', u = SH.usual[team];
-    $('shReplay').hidden = false; $('shCalm').hidden = true;
+    if (narrow()) shV.layout($('shadowPitch').parentElement.clientWidth);
+    const [entry, low, team, value, , kind] = m, opp = (lineup.oppName || meta.teams.A).split(' ')[0];
+    const moves = momentMoves(m), ours = team === 'H', rest = kind === 'rest';
+    $('shReplay').hidden = false; $('shCalm').hidden = true; $('shWarn').hidden = true;
     $('shReplayAt').textContent = clockText(low);
-    $('shTitle').textContent = ours ? `${Math.max(1, Math.round((entry - low) / meta.fps))} s before ${opp} reached our final third` : `${opp} left space before our attack`;
-    $('shSub').textContent = ours ? 'where our players could have been' : 'their weakest moves: attack there again';
-    $('shDenK').textContent = ours ? 'Space denied' : 'Their space denied';
-    $('shDen').textContent = pctM(denial); $('shDen').className = ours ? 'bad' : '';
-    $('shUsual').textContent = u ? `usual ${pctM(u)}` : '';
+    const secs = Math.max(1, Math.round((entry - low) / meta.fps));
+    $('shTitle').textContent = ours
+      ? (rest ? `We lost the ball, ${opp} reached our final third ${secs} s later` : `${secs} s before ${opp} reached our final third`)
+      : (rest ? `${opp} lost the ball with thin cover` : `${opp} left space before our attack`);
+    $('shSub').textContent = ours ? (rest ? 'where our players could have covered, a second before the loss' : 'where our players could have been')
+      : (rest ? 'their weakest cover: counter there again' : 'their weakest moves: attack there again');
+    $('shDenK').textContent = rest ? (ours ? 'Rest defence' : 'Their rest defence') : (ours ? 'Space denied' : 'Their space denied');
+    const usual = rest ? SH.usualRest[team] : SH.usual[team];
+    setKpi('shDen', pctM(value), ours ? 'bad' : '', usual ? `usual ${pctM(usual)}` : '');
+    setKpi('shRest', '–', '', '');
     $('shMoves').innerHTML = moveCards(moves, team);
     const { ps, ball } = frameState(low);
-    shPaint = dangerCells(ps, team === 'H' ? 'A' : 'H', ball);
+    shPaint = dangerCells(ps, team === 'H' ? 'A' : 'H', ball);      // the space the team that suffered had to protect
     replay.draw = () => { replay.view = shV; drawShadowPitch(ps, ball, moves, () => 1, team); };
     replay.draw();
   }
@@ -710,17 +743,18 @@
     }
     prevF = f;
   }
-  // over the last `sec` seconds while they had the ball: our mean space denied, and who most often had a move to make
+  // over the last `sec` seconds: our mean space denied while they had the ball, our mean rest defence
+  // while we had it, and who most often had a move (or a cover move) to make
   function shRecent(f, sec) {
     const i = shIdx(f); if (i < 0) return null;
-    let n = 0, sum = 0; const who = {};
+    let n = 0, sum = 0, nr = 0, sr = 0; const who = {}, cover = {};
     for (let j = i; j >= 0 && SH.frames[j] > f - sec * meta.fps; j--) {
-      if (SH.rows[j][1] !== 'A') continue;
-      n++; sum += SH.rows[j][2];
-      for (const mv of shMoves(j)) who[mv.role] = (who[mv.role] || 0) + 1;
+      const row = SH.rows[j];
+      if (row[1] === 'A') { n++; sum += row[2]; for (const mv of shMoves(j)) who[mv.role] = (who[mv.role] || 0) + 1; }
+      else if (row[1] === 'H' && row[6] != null) { nr++; sr += row[6]; for (const mv of shMoves(j, 'H', 'cover')) cover[mv.role] = (cover[mv.role] || 0) + 1; }
     }
-    const top = Object.entries(who).sort((a, b) => b[1] - a[1])[0];
-    return n >= 10 ? { avg: sum / n, n, who: top && top[1] >= 3 ? top[0] : null } : null;
+    const top = (o) => { const t = Object.entries(o).sort((a, b) => b[1] - a[1])[0]; return t && t[1] >= 3 ? t[0] : null; };
+    return { avg: n >= 10 ? sum / n : null, n, who: top(who), rest: nr >= 10 ? sr / nr : null, nr, cover: top(cover) };
   }
 
   // ================================================================== advice maps (last 30 s)
@@ -867,7 +901,7 @@
     if (ev.kind === 'fatigue' && ev.team === 'H') { const m = meta.role_means.H[ev.label]; if (m) { const [a, b] = v.S(52 + m[0] * 2.2, W / 2 + (m[1] - W / 2) * 1.5); g.beginPath(); g.arc(a, b, 6, 0, 7); g.strokeStyle = COL.bad; g.lineWidth = 2; g.stroke(); } }
     if (ev.kind === 'shadow') for (const [, , x, y, sx, sy] of ev.m[4]) {
       const [a, b] = v.S(...tf(x, y)), [c, d] = v.S(...tf(sx, sy));
-      g.beginPath(); g.moveTo(a, b); g.lineTo(c, d); g.strokeStyle = COL.shadow; g.lineWidth = 2; g.stroke();
+      g.beginPath(); g.moveTo(a, b); g.lineTo(c, d); g.strokeStyle = ev.m[5] === 'rest' ? COL.warn : COL.shadow; g.lineWidth = 2; g.stroke();
       g.beginPath(); g.arc(c, d, 2.6, 0, 7); g.fillStyle = '#E9E2FF'; g.fill();
     }
     if (ev.free) { const [fx, fy] = tf(ev.free[0], ev.free[1]); const [a, b] = v.S(fx, fy); g.beginPath(); g.arc(a, b, 7, 0, 7); g.strokeStyle = '#fff'; g.setLineDash([2, 2]); g.lineWidth = 1.2; g.stroke(); g.setLineDash([]); }
@@ -876,10 +910,11 @@
   function eventView(e) {
     const opp = (lineup.oppName || meta.teams.A).split(' ')[0];
     if (e.kind === 'shadow') {
-      const [li, gap, x, y, sx, sy] = e.m[4][0] || [], mv = li != null ? toMove(labels[li], gap, x, y, sx, sy) : null;
-      return e.team === 'H'
-        ? { title: `Shadow Replay: ${mv ? `${nameOf(mv.role)} ${moveText(mv)}` : 'space lost'} · denied ${pctM(e.m[3])}`, dot: COL.shadow }
-        : { title: `${opp} left space before our attack${mv ? ` (${mv.role})` : ''}`, dot: COL.ok };
+      const mv = momentMoves(e.m)[0], rest = e.m[5] === 'rest';
+      if (e.team === 'H') return rest
+        ? { title: `Lost the ball, thin cover${mv ? `: ${nameOf(mv.role)} ${moveText(mv)}` : ''} · rest ${pctM(e.m[3])}`, dot: COL.warn }
+        : { title: `Shadow Replay: ${mv ? `${nameOf(mv.role)} ${moveText(mv)}` : 'space lost'} · denied ${pctM(e.m[3])}`, dot: COL.shadow };
+      return { title: rest ? `${opp} lost the ball with thin cover${mv ? ` (${mv.role})` : ''}: counter there` : `${opp} left space before our attack${mv ? ` (${mv.role})` : ''}`, dot: COL.ok };
     }
     if (e.kind === 'goal') { const sc = score(e.frame); return { title: `GOAL ${e.team === 'H' ? meta.teams.H : opp} · ${sc.H}–${sc.A}`, dot: e.team === 'H' ? lineup.kitH : lineup.kitA }; }
     if (e.kind === 'fatigue') return e.team === 'H'
@@ -935,7 +970,7 @@
       cell('Pressing', now ? fmt1(now.pr) : '–', before ? `H1 ${fmt1(before.pr)}` : '', before && now && now.pr < before.pr),
       cell('Regain ≤5 s', now ? Math.round(now.reg * 100) + '%' : '–', before ? `H1 ${Math.round(before.reg * 100)}%` : '', before && now && now.reg < before.reg),
       cell('Line height', line != null ? Math.round(line) + ' m' : '–', ref ? `H1 ${Math.round(ref)}` : '', ref && line != null && line - ref > 3),
-      (() => { const r = shRecent(f, 60), u = SH.usual.H; return cell('Space denied', r ? pctM(r.avg) : '–', u ? `usual ${pctM(u)}` : 'last 60 s', r && u && r.avg < u - 50); })(),
+      (() => { const r = shRecent(f, 60), u = SH.usual.H; return cell('Space denied', r && r.avg != null ? pctM(r.avg) : '–', u ? `usual ${pctM(u)}` : 'last 60 s', r && u && r.avg != null && r.avg < u - 50); })(),
     ].join('');
   }
 
@@ -1064,14 +1099,19 @@
       else if (att > def + 0.15) items.push({ score: 35, color: COL.ok, title: 'Momentum is ours', sub: `Ball ${Math.round(att * 100)}% of the time in the ${opp} third, last 5 min` });
     }
     // the core: space we leave while they have the ball, and the last Shadow Replay
-    const den = shRecent(f, 120), u = SH.usual.H;
-    if (den && u && den.avg < u - 50) items.push({ score: 67, color: COL.warn, title: 'We are leaving dangerous space',
+    const den = shRecent(f, 120), u = SH.usual.H, ur = SH.usualRest.H;
+    if (den && u && den.avg != null && den.avg < u - 50) items.push({ score: 67, color: COL.warn, title: 'We are leaving dangerous space',
       sub: `Space denied ${pctM(den.avg)} in the last 2 min (usual ${pctM(u)})` + (den.who ? ` · most often ${nameOf(den.who)}` : '') });
+    if (den && ur && den.rest != null && den.rest < ur - 60) items.push({ score: 69, color: COL.warn,
+      title: den.cover ? `Thin rest defence: keep ${nameOf(den.cover)} back` : 'Thin rest defence when we attack',
+      sub: `If we lose the ball: we own ${pctM(den.rest)} of our dangerous space, last 2 min (usual ${pctM(ur)})` });
     const lastRep = SH.moments.filter((m) => m[2] === 'H' && m[0] <= f && m[0] > f - 90 * meta.fps).pop();
-    if (lastRep && lastRep[4].length) {
-      const [li, gap, x, y, sx, sy] = lastRep[4][0], mv = toMove(labels[li], gap, x, y, sx, sy);
-      items.push({ score: 72, color: COL.shadow, title: `Before their last attack: ${nameOf(mv.role)} ${moveText(mv)}`,
-        sub: `Space denied ${pctM(lastRep[3])} (usual ${pctM(u)}) · +${fmt1(gap / 10)}% back from that move · Shadow Replay` });
+    const repMv = lastRep && momentMoves(lastRep)[0];
+    if (repMv) {
+      const rest = lastRep[5] === 'rest';
+      items.push({ score: 72, color: rest ? COL.warn : COL.shadow,
+        title: rest ? `Lost the ball, then their attack: ${nameOf(repMv.role)} should cover ${moveText(repMv)}` : `Before their last attack: ${nameOf(repMv.role)} ${moveText(repMv)}`,
+        sub: `${rest ? 'Rest defence' : 'Space denied'} ${pctM(lastRep[3])} (usual ${pctM(rest ? ur : u)}) · +${fmt1(repMv.gap / 10)}% back from that move · Shadow Replay` });
     }
     if (S.adv && S.adv.dropTo) items.push({ score: 64, color: COL.shadow, title: `Drop the line ${Math.round(S.adv.ourLine - S.adv.dropTo)} m`, sub: `${S.adv.tiredCB.join(' + ')} tiring, space behind the line` });
     if (S.keyOpp && S.keyOpp.score > 45) items.push({ score: 55, color: COL.warn, title: `Watch the ${opp} ${S.keyOpp.role}`, sub: `${Math.round(S.keyOpp.frac * 100)}% of his time near our goal · ${S.keyOpp.spr} sprints` });

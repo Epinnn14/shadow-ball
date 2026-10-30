@@ -238,11 +238,13 @@ def cmd_offball(args):
     sides = {(t, h): roles_mod.attacks_right(track, t, h) for t in (0, 1) for h in (1, 2)}
     transitions = pd.read_parquet(os.path.join(exp, "transitions.parquet"))
     by_role, by_team, validity, trend, recovery = offball.summarize(players, teams, lab, ball, sides, transitions)
-    out = offball.save(players, teams, by_role, by_team, info, validity, trend, recovery)
+    rest = offball.rest_validity(teams, lab, ball, sides, transitions)
+    out = offball.save(players, teams, by_role, by_team, info, validity, trend, recovery, rest)
     print("off-ball model: {} player-seconds, {} team-seconds in {:.0f}s -> {}".format(
         len(players), len(teams), time.time() - t0, out))
     print(by_team.round(3).to_string(index=False))
     print(json.dumps(validity, indent=1))
+    print("rest defence:", json.dumps(rest, indent=1))
     print(json.dumps(recovery))
 
 

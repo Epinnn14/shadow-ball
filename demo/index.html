@@ -85,7 +85,8 @@
           <div><b id="shTitle">Best positions</b><span class="muted small" id="shSub">the last second, re-computed every second</span></div>
         </div>
         <div class="sh-kpis">
-          <div class="shk"><span id="shDenK">Space denied</span><b id="shDen">–</b><em id="shUsual"></em></div>
+          <div class="shk"><span id="shDenK">Space denied</span><b id="shDen">–</b><em id="shDenU"></em></div>
+          <div class="shk"><span>Rest defence</span><b id="shRest">–</b><em id="shRestU">while we have the ball</em></div>
           <div class="shk"><span>Shadow Replays</span><b id="shGap">–</b><em>our lapses so far</em></div>
           <canvas id="shSpark" aria-label="Space denied, last 2 minutes"></canvas>
         </div>
@@ -95,9 +96,10 @@
         <div class="sh-replay" id="shReplay" hidden><b>Shadow Replay</b><span id="shReplayAt"></span><i id="shReplayBar"></i>
           <button type="button" class="ghost small" id="shReplayClose">Back to live</button></div>
         <div class="sh-calm" id="shCalm" hidden>Shape holds · no move worth calling</div>
+        <div class="sh-calm warn" id="shWarn" hidden>Thin rest defence · cover if we lose it</div>
       </div>
       <div class="sh-moves" id="shMoves"></div>
-      <p class="sh-legend"><span><i class="lg-arrow"></i>better position he could reach in that second</span><span><i class="lg-zone"></i>dangerous space we control</span><span><i class="lg-zone them"></i>…they control</span><span>% = share of the dangerous space it wins back</span></p>
+      <p class="sh-legend"><span><i class="lg-arrow"></i>better position he could reach in that second</span><span><i class="lg-arrow cover"></i>cover position if we lose the ball</span><span><i class="lg-zone"></i>dangerous space we control</span><span><i class="lg-zone them"></i>…they control</span><span>% = share of the dangerous space it wins back</span></p>
     </section>
 
     <section class="card phoneonly">

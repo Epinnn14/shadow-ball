@@ -306,11 +306,14 @@ body.report-open { overflow: hidden; }
 .sh-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .lg-arrow { width: 18px; height: 2px; background: var(--shadow); position: relative; }
 .lg-arrow::after { content: ""; position: absolute; right: -2px; top: -3px; border-left: 6px solid var(--shadow); border-top: 4px solid transparent; border-bottom: 4px solid transparent; }
+.sh-calm.warn { color: var(--warn); }
+.lg-arrow.cover { background: var(--warn); } .lg-arrow.cover::after { border-left-color: var(--warn); }
+.mv.cover em { color: var(--warn); }
 .lg-zone { width: 12px; height: 10px; border-radius: 3px; background: var(--home); opacity: .6; } .lg-zone.them { background: var(--away); }
 @media (max-width: 900px) {
   .shadowcard { display: none; padding: 10px; }
   .shadowcard.replay { display: flex; }
-  .sh-kpis .shk:nth-child(2), #shSpark, .sh-legend { display: none; }
+  .sh-kpis .shk:nth-child(3), #shSpark, .sh-legend { display: none; }
   .sh-pitch { max-width: 470px; margin: 0 auto; width: 100%; }
   .sh-moves { grid-template-columns: minmax(0, 1fr); }
 }

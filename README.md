@@ -68,7 +68,11 @@ Below it, the **Shadow pitch** is the core of the concept (`sb/offball.py`, once
 dangerous space each team controls (pitch control x a threat surface learned from the match), our
 share of it ("space denied" while defending, vs our usual), and for at most three of our off-ball
 players an arrow to the best position he could have reached in that second, with the share of the
-dangerous space it wins back. Only moves worth 1.5%+ and already there a second earlier are shown,
+dangerous space it wins back. With the ball, the pitch also measures **rest defence**: the share of
+our own dangerous space we would still own if we lost the ball right now (validated: the opponent
+reaches our final third within 15 s 6.1% vs 12.9% of the time, high vs low; the simple count of
+players behind the ball does not predict it). When it is thin, amber cover arrows are shown.
+Only moves worth 1.5%+ and already there a second earlier are shown,
 so the pitch stays quiet while the shape holds. **Shadow Replay**: when the opponent enters our final
 third after our space denial fell into its lowest 35% in the previous 10 s, the Shadow pitch freezes
 for 7 s on that second (also on the phone) and the Copilot feed keeps it; the same moments for the

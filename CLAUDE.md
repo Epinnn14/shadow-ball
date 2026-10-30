@@ -58,7 +58,9 @@ Data is looked up in: `MTAH_DATA_DIR` -> `./data` -> `../Dataset Drive`.
   The live pitch is plain (players, names, ball). Below it the Shadow pitch (the core, `shadow` in clip.json from
   `sb/offball.py`): dangerous space each side controls, our space denied vs usual, max 3 arrows to the best reachable
   position (>= 15 per mille, held 2 s), and Shadow Replay (7 s freeze, also on the phone) when the opponent enters our
-  final third after our denial fell into its lowest 35%. Run `python run.py offball` before `python run.py demo`.
+  final third after our denial fell into its lowest 35% (kind `denial`) or after we lost the ball with thin rest
+  defence (kind `rest`). In possession: "Rest defence" KPI; when thin (usual - 8 points) 2 amber cover arrows.
+  Run `python run.py offball` before `python run.py demo`.
   Also: Shadow Ball (sigma cloud, on the Shadow pitch), 30 s attack/defend suggestion map.
   "Need to know" (3 automatic priorities, laptop + phone), momentum per minute and attack lanes
   (final-third entries per side) from `momentum`/`entries` in clip.json.
@@ -79,6 +81,9 @@ Data is looked up in: `MTAH_DATA_DIR` -> `./data` -> `../Dataset Drive`.
   player per second: contribution, movement gain, shadow (best of 16 reachable positions), Shadow score
   (share of reachable moves beaten, random = 50). `python run.py offball`. Validated: high space denial ->
   20.8% vs 30.9% final-third entries in 10 s (stratified). Shadow score rates movement, it does NOT predict danger.
+  Rest defence (team WITH the ball): the same J valued from the opponent's side, as if the ball were lost now;
+  cover shadow per player (`rest_gap`, `cover_x/y`). Validated: entry against in 15 s 6.1% vs 12.9% (6/6 strata);
+  the count of players behind the ball fails.
 - `scripts/broadcast_probe.py` — broadcast tracking aligned to tactical (offsets 4015 / 26919 frames, matched by
   player positions); fills ~8% of the missing ball frames. Candidate for a v5 after Phase C.
 - `sb/export.py` — contract files in `exports/` (derived data, not committed).

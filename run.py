@@ -23,6 +23,7 @@ see evaluation/../EVALUATION.md in the organisers' repo.
 """
 
 import argparse
+import os
 import sys
 import time
 
@@ -113,6 +114,10 @@ def cmd_ball_train(args):
     model = ballnet.train(track, np.concatenate([halves[1], halves[2]]),
                           steps=final_steps, batch=args.batch)
     ballnet.save(model)
+    # the frozen copy that the public repository ships (weights only, no match data) and that
+    # `python run.py ball-predict` uses, so the submission is regenerated without retraining
+    os.makedirs(os.path.dirname(FROZEN_WEIGHTS), exist_ok=True)
+    ballnet.save(model, FROZEN_WEIGHTS)
     ball, sigma, source = ballnet.reconstruct(model, track)
     out = os.path.join(paths.CACHE_DIR, "ball_reconstructed.npz")
     np.savez(out, ball=ball, sigma=sigma, source=source)
@@ -121,6 +126,41 @@ def cmd_ball_train(args):
         json.dump(report, handle, indent=1)
     print("saved model to {}, reconstruction to {}, report to {}".format(
         ballnet.model_path(), out, log))
+
+
+FROZEN_WEIGHTS = os.path.join(paths.REPO, "models", "ballnet.pt")
+
+
+def sha256(path):
+    import hashlib
+    h = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def cmd_ball_predict(args):
+    """Rebuild the unseen ball from the frozen weights, on the CPU: no training, so the same
+    weights + the same data give the same reconstruction (GPU training is not bit-reproducible)."""
+    os.environ["SB_DEVICE"] = "cpu"
+    import torch
+    torch.use_deterministic_algorithms(True)
+    torch.set_num_threads(1)
+    from sb import ballnet
+    weights = args.weights or FROZEN_WEIGHTS
+    if not os.path.isfile(weights):
+        sys.exit("No weights at {}. Train them with: python run.py ball-train --cv".format(weights))
+    track = atd.Tracking()
+    model = ballnet.load(weights)
+    model.eval()
+    ball, sigma, source = ballnet.reconstruct(model, track)
+    out = os.path.join(paths.CACHE_DIR, "ball_reconstructed.npz")
+    os.makedirs(paths.CACHE_DIR, exist_ok=True)
+    np.savez(out, ball=ball, sigma=sigma, source=source)
+    print("weights  {}  sha256 {}".format(weights, sha256(weights)))
+    print("wrote    {}  ({} frames rebuilt)".format(out, int(source.sum())))
+    print("next: python run.py v4")
 
 
 def cmd_v2(args, module=v2, name="v2_ballnet"):
@@ -134,7 +174,7 @@ def cmd_v2(args, module=v2, name="v2_ballnet"):
     out = submission.write(labels, name)
     stats = submission.summary(labels)
     graded = sum(stats[k] for k in "HAD")
-    print("wrote", out)
+    print("wrote", out, " sha256", sha256(out))
     print("{}  D share {:.1f}%  mean possession {:.1f}s".format(
         stats, 100 * stats["D"] / graded, (stats["H"] + stats["A"]) / paths.FPS / stats["possessions"]))
     submission.validate(out)
@@ -318,6 +358,13 @@ def cmd_serve(args):
             self.end_headers()
             self.wfile.write(body)
 
+        def end_headers(self):
+            # the app changes often: the browser must re-check every file (304 when unchanged),
+            # otherwise an old app.js / style.css stays cached next to a new index.html
+            if not self.path.startswith("/api/"):
+                self.send_header("Cache-Control", "no-cache")
+            super().end_headers()
+
         def do_GET(self):
             route = self.path.split("?")[0]
             if route == "/api/state":
@@ -427,6 +474,9 @@ def main():
     p.add_argument("--train-half", type=int, choices=(1, 2),
                    help="train on one half only -> cache/ballnet_half<N>.pt (for leak-free tests)")
     p.set_defaults(func=cmd_ball_train)
+    p = sub.add_parser("ball-predict", help="rebuild the unseen ball from the frozen weights (CPU, reproducible)")
+    p.add_argument("--weights", help="default: models/ballnet.pt")
+    p.set_defaults(func=cmd_ball_predict)
     sub.add_parser("v2").set_defaults(func=cmd_v2)
     sub.add_parser("v3").set_defaults(func=cmd_v3)
     sub.add_parser("v4").set_defaults(func=cmd_v4)

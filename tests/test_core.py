@@ -416,3 +416,21 @@ def test_rating_rows_per_minute_and_family_reference():
     assert ["H", 0, 1, 0, 60, 3600, 600.0] in out and ["H", 0, 1, 1, 30, 1800, 300.0] in out
     assert not any(r[1] == 2 for r in out)                       # no rating for goalkeepers
     assert ref["LCB"] == ref["RCB"] == 12.5                       # one family: centre-backs of both teams
+
+
+def test_kickoff_frame_after_standstill_in_own_halves():
+    from types import SimpleNamespace
+    from sb import features
+    fps, n = paths.FPS, 40 * paths.FPS
+    teams = np.array([0] * 10 + [1] * 10)
+    xy = np.zeros((n, 20, 2), dtype=np.float32)
+    xy[:, :10, 0], xy[:, 10:, 0], xy[:, :, 1] = 30.0, 75.0, 34.0      # home on the left, away on the right
+    speed = np.full((n, 20), 2.0, dtype=np.float32)                   # warming up: moving
+    speed[10 * fps:20 * fps] = 0.3                                    # lined up and still
+    kick = 20 * fps
+    speed[kick:] = 3.0                                                # kick-off: everybody goes
+    track = SimpleNamespace(xy=xy, teams=teams, speed=speed)
+    k = features.kickoff_frame(track, 0, {0: True, 1: False})
+    assert abs(k - kick) <= fps // 2
+    # wrong sides: nobody is in his own half, so no kick-off is found
+    assert features.kickoff_frame(track, 0, {0: False, 1: True}) is None

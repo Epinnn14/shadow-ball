@@ -19,7 +19,8 @@ v2 additionally needs PyTorch (not in requirements.txt because the right build d
 GPU: take the command from https://pytorch.org/get-started/locally/):
 
 ```bash
-python run.py ball-train --cv           # ~100k-parameter model; GPU if available, else CPU
+python run.py ball-train --cv           # ~100k-parameter model; GPU if available, else CPU (writes models/ballnet.pt)
+python run.py ball-predict             # reproduce: unseen ball from the frozen models/ballnet.pt, CPU, deterministic
 python run.py v2                        # v2 (fallback)
 python run.py v3                        # v3 (fallback)
 python run.py v4                        # current submission: v4

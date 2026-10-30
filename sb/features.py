@@ -247,3 +247,39 @@ def tagged_set_pieces(n_frames, events):
     for e in events:
         flag[max(0, e["start"]):min(n_frames, e["start"] + 5 * paths.FPS)] = 1.0
     return flag
+
+
+def kickoff_frame(track, start, right, search_s=300, still=1.0, still_s=2.0, burst=1.5, own=0.7):
+    """The kick-off of a half: both teams standing in their own halves (>= `own` of their tracked
+    players on their side) and nearly still (team speed < `still` m/s for `still_s`), then
+    play bursts (> `burst` m/s within 3 s). Returns the first frame where the team speeds up from
+    that standstill, or None. `right` = {0: home attacks right, 1: away attacks right} for this half.
+    The ball is not used: at the second-half kick-off of this match it is not tracked."""
+    import warnings
+    fps = paths.FPS
+    with warnings.catch_warnings(), np.errstate(all="ignore"):
+        warnings.simplefilter("ignore", RuntimeWarning)
+        raw = np.nanmean(track.speed, axis=1)
+    raw = np.nan_to_num(raw, nan=1.5)
+    act = rolling_mean(raw, fps)
+    L = paths.PITCH[0]
+    w = int(still_s * fps)
+
+    def own_share(f, team):
+        x = track.xy[f, track.teams == team, 0]
+        x = x[~np.isnan(x)]
+        if len(x) < 6:
+            return 0.0
+        return float(np.mean(x < L / 2 if right[team] else x > L / 2))
+
+    end = min(len(raw) - 4 * fps, start + int(search_s * fps))
+    for k in range(max(start, w), end):
+        if act[k - w:k].max() >= still or act[k:k + 3 * fps].max() <= burst:
+            continue
+        if own_share(k, 0) < own or own_share(k, 1) < own:
+            continue
+        base = raw[k - w:k].mean()
+        rise = np.where(raw[k:k + 4 * fps] > base + 0.25)[0]
+        if len(rise):
+            return int(k + rise[0])
+    return None

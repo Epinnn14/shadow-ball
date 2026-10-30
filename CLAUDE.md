@@ -15,7 +15,8 @@ python run.py v1                    # v1, fallback
 python run.py ball-train --cv       # v2: train the ball reconstruction model (GPU), cross-validation by half
 python run.py v2                    # v2: v1 + reconstructed ball (fallback)
 python run.py v3                    # v3: v2 + fouls/whistle (fallback)
-python run.py v4                    # v4.1: v3 + ball in play from the restart kick -- CURRENT SUBMISSION
+python run.py ball-predict          # unseen ball from the FROZEN weights models/ballnet.pt (CPU, deterministic, no training)
+python run.py v4                    # v4.2: v3 + restart kick + dead before the kick-off -- CURRENT SUBMISSION (prints SHA-256)
 python run.py export                # exports/possession.csv + exports/ball.parquet (DO NOT commit)
 python run.py roles                 # Phase B: position labels + movement -> exports/roles.parquet, movement.parquet
 python run.py tactics               # Phase B: transitions/counter-press, space map, shape, stamina -> exports/
@@ -41,12 +42,17 @@ Data is looked up in: `MTAH_DATA_DIR` -> `./data` -> `../Dataset Drive`.
 - `sb/tagging.py` — Smart Tagging to video frames.
 - `sb/hmm.py` — 3-state HMM (H/A/D) + Viterbi.
 - `sb/v1.py` — v1: all parameters in `PARAMS`, each with its physical justification.
+- `models/ballnet.pt` — frozen ballnet weights COMMITTED to the public repo (weights only, no data): the submission is
+  regenerated with `ball-predict` + `v4` without retraining (GPU training is not bit-reproducible; checked: identical
+  reconstruction and identical CSV hash from the same weights). `ball-train` (final model) rewrites it.
 - `sb/ballnet.py` — ball reconstruction model (small transformer over the player set, self-supervised
   with synthetic gaps drawn from the real gap distribution; outputs position + uncertainty).
 - `sb/v2.py` — v1 + reconstructed ball for team-control evidence (dead ball still uses the real ball).
 - `sb/v3.py` — v2 + stoppages without the ball going out (whistle inferred from collective slowdown,
   10 s activity, ball placed inside the pitch).
-- `sb/v4.py` — v3 + 5 s of "in play" evidence after a visible restart kick.
+- `sb/v4.py` — v3 + 5 s of "in play" evidence after a visible restart kick (v4.1: unseen restarts); v4.2: dead
+  before the kick-off (`features.kickoff_frame`: both teams still in own halves, then a burst; ball not used) when a
+  half's graded window opens > 10 s before it (half 2: graded from 110,808, kick-off ~113,742).
 - `sb/roles.py` — per-frame position labels (Hungarian matching to the team's out-of-possession shape).
 - `sb/movement.py` — distance, HSR, sprints, top speed, average position, heatmap per position.
 - `sb/tactics.py` — Transition Radar, Space Map, Shape Monitor, Stamina Monitor (Fatigue Risk Score).

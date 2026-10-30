@@ -492,7 +492,7 @@
     };
     $('shReplayClose').onclick = closeReplay;
     document.querySelectorAll('#pressTabs button').forEach((b) => b.onclick = () => {
-      pressTeam = b.dataset.t; pressCache = ''; document.querySelectorAll('#pressTabs button').forEach((x) => x.classList.toggle('on', x === b)); pressingCard(videoFrame(S.t));
+      pressTeamSel = b.dataset.t; pressCache = ''; document.querySelectorAll('#pressTabs button').forEach((x) => x.classList.toggle('on', x === b)); pressingCard(videoFrame(S.t));
     });
     addEventListener('resize', () => { buildViews(); panels(true); });
     addEventListener('keydown', (e) => {
@@ -870,7 +870,7 @@
   // band names for our coach: our pressing (H frame) and theirs (A frame: their own third is deep in their half)
   const P_BAND = { H: ['our third', 'our half', 'their half', 'their third'], A: ['their own third', 'their half', 'our half', 'our third'] };
   const P_LANE = ['left', 'middle', 'right'];
-  let pressV, pressTeam = 'H', pressCache = '';
+  let pressV, pressTeamSel = 'H', pressCache = '';
   function pressZones(f, team) {
     const t = team === 'H' ? 0 : 1, z = {};
     for (const [fr, d, band, ln, press, regain, box] of C.pressing || []) {
@@ -905,11 +905,14 @@
     return [x0, y0, x1, y1];
   }
   const pctR = (v) => (v == null ? '–' : Math.round(v * 100) + '%');
-  function pressingCard(f) {
-    if (narrow() || !pressV || !C.pressing) { if (!C.pressing && $('pressCard')) $('pressCard').hidden = true; return; }
+  // live card (defaults) or the report (its own view, our team, no cache)
+  function pressingCard(f, v = pressV, tEl = $('pressTitle'), sEl = $('pressSub'), pressTeam = pressTeamSel) {
+    if (!C.pressing) { if ($('pressCard')) $('pressCard').hidden = true; return; }
+    const live = v === pressV;
+    if (live && (narrow() || !pressV)) return;
     const key = pressTeam + Math.floor((f - meta.first) / (10 * meta.fps)) + lineup.kitH;
-    if (key === pressCache) return; pressCache = key;
-    const v = pressV, g = v.ctx; v.begin();
+    if (live) { if (key === pressCache) return; pressCache = key; }
+    const g = v.ctx; v.begin();
     const z = pressZones(f, pressTeam);
     for (const s of Object.values(z)) {
       const [x0, y0, x1, y1] = zoneRect(s.band, s.lane, pressTeam);
@@ -928,11 +931,11 @@
     const best = bands.slice().sort((a, b) => (b.regP - b.regH) - (a.regP - a.regH))[0];
     const worst = bands.slice().sort((a, b) => ((a.regP - a.regH) - 2 * (a.boxP - a.boxH)) - ((b.regP - b.regH) - 2 * (b.boxP - b.boxH)))[0];
     const where = (b) => P_BAND[pressTeam][b.band];
-    $('pressTitle').textContent = best && best.regP > best.regH + 0.04 ? `${pressTeam === 'H' ? 'Press' : `${opp} press`} in ${where(best)}: won back ${pctR(best.regP)} vs ${pctR(best.regH)} holding` : 'No zone where pressing clearly pays yet';
-    $('pressSub').textContent = worst && worst !== best && (worst.regP < worst.regH - 0.04 || worst.boxP > worst.boxH + 0.02)
+    tEl.textContent = best && best.regP > best.regH + 0.04 ? `${pressTeam === 'H' ? 'Press' : `${opp} press`} in ${where(best)}: won back ${pctR(best.regP)} vs ${pctR(best.regH)} holding` : 'No zone where pressing clearly pays yet';
+    sEl.textContent = worst && worst !== best && (worst.regP < worst.regH - 0.04 || worst.boxP > worst.boxH + 0.02)
       ? `${pressTeam === 'H' ? 'Hold' : `${opp} leak`} in ${where(worst)}: pressing there won it back ${pctR(worst.regP)} vs ${pctR(worst.regH)}, ball in ${pressTeam === 'H' ? 'our' : 'their'} box ${pctR(worst.boxP)} vs ${pctR(worst.boxH)}`
       : `${who === 'we' ? 'We' : who} pressed ${Math.round(100 * bands.reduce((s, b) => s + b.np, 0) / Math.max(1, bands.reduce((s, b) => s + b.np + b.nh, 0)))}% of the time without the ball`;
-    S.pressing = pressTeam === 'H' ? { best, worst, zones: z } : S.pressing;
+    if (live) S.pressing = pressTeam === 'H' ? { best, worst, zones: z } : S.pressing;
   }
   // the kind of OUR pressing zone a point (our view) falls in: for the Defend simulation
   function ourPressZone(f, x, y) {
@@ -1749,6 +1752,7 @@
         <section class="rblock"><h2>Freshness</h2><canvas id="repFat"></canvas><p class="rnote">Number = fatigue risk 0–100 (last 5-minute block), against that position's first 15 minutes.</p></section>
         <section class="rblock"><h2>1v1 duels · 10 min</h2><canvas id="repDuel"></canvas><div id="repDuelL"></div></section>
       </div>
+      ${shadowReportHtml(f)}
       <footer class="rf">Positions are tactical roles from tracking (substitutions are not visible yet). Set pieces from Smart Tagging, placed where the ball was seen; duels are estimates from player positions. Licensed match data: this report is for the team only.</footer>`;
     $('report').hidden = false; document.body.classList.add('report-open');
     const wFull = $('repBody').clientWidth, wHalf = Math.floor((wFull - 20) / 2);
@@ -1758,6 +1762,75 @@
     setPieces(f, mk('repSp', { x0: 0, x1: L, m: 1.5 }, wHalf), $('repSpT'));
     fatigueMap(f, mk('repFat', { x0: 0, x1: L, m: 1.5 }, wHalf), null);
     duels(st, mk('repDuel', { x0: 0, x1: 62, m: 1.5 }, wHalf), $('repDuelL'), true);
+    if ($('repTrend')) trendChart(f, $('repTrend'), wFull);
+    if ($('repPress')) pressingCard(f, mk('repPress', { x0: 0, x1: L, m: 1.5 }, wHalf), $('repPressT'), $('repPressS'), 'H');
+  }
+
+  // ---------------------------------------------------------------- report page 3: Shadow Ball
+  // movement without the ball, from kick-off to now: space denied and rest defence per 5 minutes,
+  // the replays, pressing traps, space leaks and the Shadow ratings of our XI.
+  function trendRows(f) { return ((C.shadow || {}).trend || []).filter(([h, b]) => blockEnd(h, b) <= f); }
+  function shadowReportHtml(f) {
+    if (!C.shadow) return '';
+    const tr = trendRows(f), opp = lineup.oppName || meta.teams.A, opp1 = opp.split(' ')[0];
+    const wavg = (team, vi, ni, half) => { let s = 0, n = 0; for (const r of tr) if (r[2] === team && r[vi] != null && (!half || r[0] === half)) { s += r[vi] * r[ni]; n += r[ni]; } return n ? s / n : null; };
+    const pc = (v) => (v == null ? '–' : Math.round(v / 10) + '%');
+    const reps = SH.moments.filter((m) => m[0] <= f), ours = reps.filter((m) => m[2] === 'H'), theirs = reps.filter((m) => m[2] === 'A');
+    const R = shadowRatings(f), avg = (t) => { const v = Object.entries(R).filter(([k]) => k[0] === t).map(([, r]) => r.rating); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+    const kpi = (k, v, d) => `<div class="rk"><span>${k}</span><b>${v}</b><em>${d || ''}</em></div>`;
+    const slotRole = {}; for (const [role, slot] of Object.entries(roleToSlot.H)) slotRole[slot] = role;
+    const rateRows = D.slots(lineup.formation).filter((sl) => sl.label !== 'GK').map((sl) => {
+      const role = slotRole[sl.label], r = role && R['H:' + role], p = player(lineup.xi[sl.label]);
+      return r ? { name: p ? p.name : sl.label, slot: sl.label, r } : null;
+    }).filter(Boolean).sort((a, b) => b.r.rating - a.r.rating);
+    const leaksNow = leaks(f).slice(0, 5);
+    const repLine = (m) => { const mv = momentMoves(m)[0]; return `<li><b>${clockText(m[1])}</b> ${m[5] === 'rest' ? 'lost the ball, rest defence' : 'space denied'} ${pc(m[3])}${mv ? ` · ${esc(nameFor(m[2], mv.role))} ${esc(moveText(mv))} (+${fmt1(mv.gap / 10)}%)` : ''}</li>`; };
+    return `<div class="pagebreak"></div>
+      <header class="rh small"><div><h1>Shadow Ball: movement without the ball</h1><p>${esc(meta.teams.H)} ${score(f).H}–${score(f).A} ${esc(opp)} · up to ${clockText(f)}</p></div><div class="rmark"><span class="mark"></span>Shadow<b>Ball</b></div></header>
+      <section class="rkpis rk4">
+        ${kpi('Space denied', pc(wavg('H', 3, 4)), `1st half ${pc(wavg('H', 3, 4, 1))} · 2nd ${pc(wavg('H', 3, 4, 2))} · ${esc(opp1)} ${pc(wavg('A', 3, 4))}`)}
+        ${kpi('Rest defence', pc(wavg('H', 5, 6)), `if the ball is lost · ${esc(opp1)} ${pc(wavg('A', 5, 6))}`)}
+        ${kpi('Shadow Replays', String(ours.length), `our lapses in this clip · ${esc(opp1)} ${theirs.length}`)}
+        ${kpi('Shadow rating', avg('H') != null ? avg('H').toFixed(1) : '–', `${esc(opp1)} ${avg('A') != null ? avg('A').toFixed(1) : '–'} · 6.5 = average`)}
+      </section>
+      <section class="rblock"><h2>Space denied per 5 minutes</h2><canvas id="repTrend"></canvas>
+        <p class="rnote">Share of the dangerous space each team controls while the other has the ball (pitch control x the threat surface learned from this match). Low space denied came before 2.3x more final-third entries against Barcelona.</p></section>
+      <div class="rgrid">
+        <section class="rblock"><h2>Pressing traps · ${esc(meta.teams.H)}</h2><canvas id="repPress"></canvas><p class="rnote"><b id="repPressT"></b> <span id="repPressS"></span></p>
+          <p class="rnote">Per zone: won back within 5 s when 2+ players pressed · when we held. Green = trap, red = leak. Not causal.</p></section>
+        <section class="rblock"><h2>Shadow ratings · ${esc(meta.teams.H)}</h2>
+          <table class="mini"><thead><tr><th>Player</th><th>Rating</th><th>Shadow score</th><th>Space held</th></tr></thead><tbody>
+          ${rateRows.map((x) => `<tr><td>${esc(x.name)} <span class="muted">${x.slot}</span></td><td><b>${x.r.rating.toFixed(1)}</b></td><td>${Math.round(x.r.score)}</td><td>${x.r.held.toFixed(2)}×</td></tr>`).join('') || '<tr><td colspan="4">Not enough minutes yet.</td></tr>'}</tbody></table>
+          <p class="rnote">6.5 + movement without the ball (Shadow score vs 55; random = 50) + dangerous space held vs the average for the position. Our formula, not validated.</p></section>
+        <section class="rblock"><h2>Space leaks · last 10 min vs first 15</h2>
+          <table class="mini"><thead><tr><th>Player</th><th>Now vs early</th><th>Fatigue</th></tr></thead><tbody>
+          ${leaksNow.map((r) => `<tr><td>${esc(nameOf(r.role))} <span class="muted">${r.role}</span></td><td><b>${r.ratio.toFixed(1)}×</b>${r.flag ? ' leaking' : ''}</td><td>${r.risk != null ? r.risk + ' ' + (r.level || '') : '–'}</td></tr>`).join('') || '<tr><td colspan="3">Baseline still building (first 15 minutes of the half).</td></tr>'}</tbody></table>
+          <p class="rnote">Dangerous space each position leaves on the table while we defend. The fatigue score alone does not predict it (r = -0.005).</p></section>
+        <section class="rblock"><h2>Shadow Replays</h2>
+          <p class="rnote"><b>Ours</b> (before ${esc(opp1)} reached our final third)</p><ul class="rrep">${ours.map(repLine).join('') || '<li>None in this clip.</li>'}</ul>
+          <p class="rnote"><b>Theirs</b> (where ${esc(opp1)} left space before our attacks)</p><ul class="rrep">${theirs.slice(-6).map(repLine).join('') || '<li>None in this clip.</li>'}</ul></section>
+      </div>`;
+  }
+  function trendChart(f, c, w) {
+    const h = 150, d = window.devicePixelRatio || 1; c.width = w * d; c.height = h * d; c.style.height = h + 'px';
+    const g = c.getContext('2d'); g.setTransform(d, 0, 0, d, 0, 0); g.clearRect(0, 0, w, h);
+    const tr = trendRows(f), x0 = 34, x1 = w - 8, y0 = 10, y1 = h - 22, maxM = 95;
+    const X = (h_, b) => x0 + ((b + 2.5 + (h_ === 2 ? 5 : 0)) / (maxM + 5)) * (x1 - x0), Y = (v) => y1 - ((v / 10 - 40) / 60) * (y1 - y0);
+    g.font = `10px ${CSS.getPropertyValue('--sans')}`; g.fillStyle = '#5B626C'; g.textAlign = 'right'; g.textBaseline = 'middle';
+    for (const v of [40, 60, 80, 100]) { g.fillText(v + '%', x0 - 4, Y(v * 10)); g.strokeStyle = '#E3E6EA'; g.beginPath(); g.moveTo(x0, Y(v * 10)); g.lineTo(x1, Y(v * 10)); g.stroke(); }
+    g.textAlign = 'center'; for (const m of [0, 15, 30, 45, 60, 75, 90]) g.fillText(m + "'", X(m < 45 ? 1 : 2, m - 2.5), h - 8);
+    g.strokeStyle = '#9AA1AB'; g.beginPath(); g.moveTo(X(2, 42.5), y0); g.lineTo(X(2, 42.5), y1); g.stroke();
+    for (const [team, col] of [['A', lineup.kitA], ['H', lineup.kitH]]) {
+      for (const half of [1, 2]) {
+        const pts = tr.filter((r) => r[2] === team && r[0] === half && r[3] != null && r[4] >= 20);
+        g.strokeStyle = col; g.lineWidth = team === 'H' ? 2.2 : 1.4; g.beginPath();
+        pts.forEach((r, i) => (i ? g.lineTo(X(r[0], r[1]), Y(r[3])) : g.moveTo(X(r[0], r[1]), Y(r[3])))); g.stroke();
+        g.fillStyle = col; for (const r of pts) { g.beginPath(); g.arc(X(r[0], r[1]), Y(r[3]), 2.4, 0, 7); g.fill(); }
+      }
+    }
+    g.textAlign = 'left'; g.font = `600 11px ${CSS.getPropertyValue('--sans')}`;
+    g.fillStyle = lineup.kitH; g.fillText(`${meta.teams.H} defending`, x0 + 6, y0 + 6);
+    g.fillStyle = lineup.kitA; g.fillText(`${(lineup.oppName || meta.teams.A).split(' ')[0]} defending`, x0 + 150, y0 + 6);
   }
 
   // ================================================================== Plan B + Player Recommender

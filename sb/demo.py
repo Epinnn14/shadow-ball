@@ -21,6 +21,8 @@ far touchline):
               becomes known (the end of its 5-min block, or the turnover)
   stamina     Fatigue Risk Score per role and 5-min block
   transitions every turnover up to the end of the clip (for counter-press KPIs)
+  shadow      the off-ball core once per second: space denied, shadow positions, Shadow Replay
+              moments (see shadow_block; null until `python run.py offball` has been run)
 """
 
 import json
@@ -210,6 +212,9 @@ def build(track, labels, ball, sigma, source, role_df, tactics_dir, minute_from=
     runs = label_runs(lab, half, last)
     running = team_running(pd.read_parquet(os.path.join(tactics_dir, "movement.parquet")))
 
+    ob_players, ob_teams, surface = load_offball(tactics_dir)
+    shadow = shadow_block(ob_players, ob_teams, entries, label_idx, first, last, surface)
+
     with open(os.path.join(tactics_dir, "formations.json")) as handle:
         formations = json.load(handle)
     return {
@@ -224,14 +229,14 @@ def build(track, labels, ball, sigma, source, role_df, tactics_dir, minute_from=
                  "shape_ref": alerts["reference"],
                  # each team's own out-of-possession shape (roles.py): depth relative to the
                  # team centroid, width from its left touchline, in its attacking frame.
-                 # The demo's Shadow Team places this shape around the live team.
+                 # The demo's fatigue map and line-up matching use this shape.
                  "role_means": {side: _role_means(formations["{}_half{}".format(track.team_names[t], half)])
                                 for t, side in ((0, "H"), (1, "A"))},
                  "attacks_right": {side: bool(sides[(t, half)]) for t, side in ((0, "H"), (1, "A"))}},
         "frames": frames, "seconds": {"frames": secs.tolist(), "movement": cum, "shape": shape},
         "timeline": timeline, "events": events, "stamina": stam_rows, "transitions": tr_rows,
         "momentum": momentum, "entries": entries, "setpieces": setpieces,
-        "match_events": events_st, "runs": runs, "team_running": running,
+        "match_events": events_st, "runs": runs, "team_running": running, "shadow": shadow,
     }
 
 
@@ -376,6 +381,88 @@ def team_running(movement_df):
     agg = g.agg(d=("distance_m", "sum"), h=("hsr_m", "sum"), s=("sprints", "sum")).reset_index()
     return [[r.team, int(r.half), int(r.minute_from), round(r.d / 1000, 2), round(r.h / 1000, 2), int(r.s)]
             for r in agg.itertuples()]
+
+
+MOMENT_LOOKBACK = 10 * paths.FPS     # a final-third entry is traced back this far
+MOMENT_PCT = 35                      # ... and kept when denial fell into the defender's lowest 35%
+GAP_MIN = 5.0                        # per-mille: shadow rows below this are dropped (the app never draws them)
+
+
+def shadow_block(players, teams, entries, label_idx, first, last, surface):
+    """Shadow Ball's core in the clip: the off-ball model (sb/offball.py) once per second.
+
+    teams    [frame, possession, J_H, J_A, gap_H, gap_A] in per-mille of the dangerous space;
+             the team WITHOUT the ball 'denies' its J.
+    players  aligned with teams: [slot, team (0/1), label idx, without ball (1/0), gap, Shadow score,
+             shadow x, y, x, y] (raw camera frame), only rows with a gap >= GAP_MIN.
+    usual    each team's median space denial while defending, from kick-off to the end of the clip.
+    moments  Shadow Replay: before every final-third entry up to the end of the clip, the second in
+             the previous 10 s where the defending team denied the least, kept when that is among
+             its lowest 35%: [entry frame, low frame, defending team, denial, top 3 movers
+             [label idx, gap, x, y, shadow x, shadow y]].
+    surface  the learned threat surface (5 m cells, attacking frame) to paint dangerous space."""
+    if players is None or teams is None or not len(teams):
+        return None
+    teams = teams[teams.frame <= last].sort_values("frame")
+    players = players[players.frame <= last]
+    denial = np.where(teams.possession == "H", teams.J_A, teams.J_H)
+    defending = np.where(teams.possession == "H", "A", "H")
+    usual, cut = {}, {}
+    for team in ("H", "A"):
+        d = denial[defending == team]
+        usual[team] = round(float(np.median(d)), 1) if len(d) else None
+        cut[team] = float(np.percentile(d, MOMENT_PCT)) if len(d) else -1
+
+    def rows_at(frame, team=None):
+        g = players[players.frame == frame]
+        return g if team is None else g[g.team == team]
+
+    moments = []
+    tf = teams.frame.to_numpy()
+    for entry, attacker, _ in entries:
+        if entry > last:
+            continue
+        defender = "A" if attacker == "H" else "H"
+        sel = (tf >= entry - MOMENT_LOOKBACK) & (tf < entry) & (teams.possession.to_numpy() == attacker)
+        if sel.sum() < 3:
+            continue
+        i = np.where(sel)[0][np.argmin(denial[sel])]
+        if denial[i] >= cut[defender]:
+            continue
+        low = int(tf[i])
+        top = rows_at(low, defender)
+        top = top[top.phase == "without ball"].sort_values("gap", ascending=False).head(3)
+        moments.append([int(entry), low, defender, round(float(denial[i]), 1),
+                        [[label_idx.get(r.label, -1), round(float(r.gap), 1), round(float(r.x), 1), round(float(r.y), 1),
+                          round(float(r.shadow_x), 1), round(float(r.shadow_y), 1)] for r in top.itertuples()]])
+
+    clip_t = teams[(teams.frame >= first) & (teams.frame <= last)]
+    clip_p = players[(players.frame >= first) & (players.gap >= GAP_MIN)]
+    by_frame = {f: g for f, g in clip_p.groupby("frame")}
+    rows = []
+    for f in clip_t.frame:
+        g = by_frame.get(f)
+        rows.append([] if g is None else [
+            [int(r.slot), 0 if r.team == "H" else 1, label_idx.get(r.label, -1), int(r.phase == "without ball"),
+             round(float(r.gap), 1), int(round(r.shadow_score)), round(float(r.shadow_x), 1), round(float(r.shadow_y), 1),
+             round(float(r.x), 1), round(float(r.y), 1)] for r in g.itertuples()])
+    return {"teams": [[int(r.frame), r.possession, round(float(r.J_H), 1), round(float(r.J_A), 1),
+                       round(float(r.gap_H), 1), round(float(r.gap_A), 1)] for r in clip_t.itertuples()],
+            "players": rows, "usual": usual, "moments": moments,
+            "surface": None if surface is None else np.round(np.asarray(surface), 3).tolist(), "surface_cell": 5.0}
+
+
+def load_offball(out_dir):
+    """The off-ball outputs if `python run.py offball` has been run, else (None, None, None)."""
+    p = os.path.join(out_dir, "offball.parquet")
+    if not os.path.exists(p):
+        return None, None, None
+    surface = None
+    summary = os.path.join(out_dir, "offball_summary.json")
+    if os.path.exists(summary):
+        with open(summary) as handle:
+            surface = json.load(handle).get("threat_surface")
+    return pd.read_parquet(p), pd.read_parquet(os.path.join(out_dir, "offball_team.parquet")), surface
 
 
 def _role_means(entry):

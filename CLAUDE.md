@@ -19,6 +19,7 @@ python run.py v4                    # v4.1: v3 + ball in play from the restart k
 python run.py export                # exports/possession.csv + exports/ball.parquet (DO NOT commit)
 python run.py roles                 # Phase B: position labels + movement -> exports/roles.parquet, movement.parquet
 python run.py tactics               # Phase B: transitions/counter-press, space map, shape, stamina -> exports/
+python run.py offball               # CORE: off-ball movement, space denial, shadow positions -> exports/offball*
 python run.py demo                  # replay clip for the web demo -> exports/demo/clip.json (DO NOT upload)
 python run.py serve                 # demo on the laptop (full) + phone on the same Wi-Fi/hotspot (pitch + movement)
 python scripts/restart_ab.py        # A/B of the old vs new restart rule (ball hidden)
@@ -54,7 +55,11 @@ Data is looked up in: `MTAH_DATA_DIR` -> `./data` -> `../Dataset Drive`.
   follows the laptop's time via /api/state. `?mode=lead|follow` forces a role, `?setup=0` skips setup.
   `demo/data.js` = 18 formations + starting squads (editable by the coach). Line-up + photos are saved via
   /api/lineup to `exports/demo/lineup.json` (local). All views: our team attacks to the right/up.
-  Signature features: Shadow Team, Shadow Ball (sigma cloud), control zones, 30 s attack/defend suggestion map.
+  The live pitch is plain (players, names, ball). Below it the Shadow pitch (the core, `shadow` in clip.json from
+  `sb/offball.py`): dangerous space each side controls, our space denied vs usual, max 3 arrows to the best reachable
+  position (>= 15 per mille, held 2 s), and Shadow Replay (7 s freeze, also on the phone) when the opponent enters our
+  final third after our denial fell into its lowest 35%. Run `python run.py offball` before `python run.py demo`.
+  Also: Shadow Ball (sigma cloud, on the Shadow pitch), 30 s attack/defend suggestion map.
   "Need to know" (3 automatic priorities, laptop + phone), momentum per minute and attack lanes
   (final-third entries per side) from `momentum`/`entries` in clip.json.
   Set pieces (`setpieces`: type + team from Smart Tagging, position from the visible ball; throw-in team from
@@ -68,6 +73,12 @@ Data is looked up in: `MTAH_DATA_DIR` -> `./data` -> `../Dataset Drive`.
   third over the last 30 s while the opponent has the ball, our players moved as the option says); shape
   options are only proposed when they help by 2+ points. Server: `/api/snapshot` -> `exports/demo/decisions.json`
   (for N's Bench Copilot), `/api/lineup` -> `lineup.json` + `players.json`.
+- `sb/offball.py` — THE CORE (focus of the concept): movement without the ball. Pitch control (arrival
+  times, soft-min per team) x threat surface learned from the match (P(box within 10 s)) = J, the share of
+  the dangerous space a team owns; same objective with and without the ball ("space denied"). Per off-ball
+  player per second: contribution, movement gain, shadow (best of 16 reachable positions), Shadow score
+  (share of reachable moves beaten, random = 50). `python run.py offball`. Validated: high space denial ->
+  20.8% vs 30.9% final-third entries in 10 s (stratified). Shadow score rates movement, it does NOT predict danger.
 - `scripts/broadcast_probe.py` — broadcast tracking aligned to tactical (offsets 4015 / 26919 frames, matched by
   player positions); fills ~8% of the missing ball frames. Candidate for a v5 after Phase C.
 - `sb/export.py` — contract files in `exports/` (derived data, not committed).

@@ -11,6 +11,7 @@
     python run.py export                # contract files for the next phases -> exports/
     python run.py roles                 # Fase B: position labels + movement per position -> exports/
     python run.py tactics               # Fase B: transitions, shape, stamina, space -> exports/
+    python run.py offball               # Shadow Ball core: off-ball movement value + shadow positions
     python run.py demo                  # replay clip for the web demo -> exports/demo/clip.json
     python run.py serve                 # web demo on the laptop, phones on the same Wi-Fi
     python run.py score                 # score every CSV in submissions/ (public 5 min only)
@@ -220,6 +221,31 @@ def cmd_tactics(args):
             ["team", "label", "minute_from", "risk", "hsr_vs_start", "dist_vs_start"]].to_string(index=False))
 
 
+def cmd_offball(args):
+    import json
+    import os
+    import pandas as pd
+    from sb import offball, roles as roles_mod
+    from sb.tactics import filled_labels
+    exp = os.path.join(paths.REPO, "exports")
+    labels = pd.read_csv(os.path.join(paths.SUBMISSIONS_DIR, "v4_restart.csv"))["label"].to_numpy()
+    ball = np.load(os.path.join(paths.CACHE_DIR, "ball_reconstructed.npz"))["ball"]
+    track = atd.Tracking()
+    role_df = pd.read_parquet(os.path.join(exp, "roles.parquet"))
+    t0 = time.time()
+    players, teams, info = offball.run(track, labels, ball, role_df, every=args.every)
+    lab = filled_labels(labels)
+    sides = {(t, h): roles_mod.attacks_right(track, t, h) for t in (0, 1) for h in (1, 2)}
+    transitions = pd.read_parquet(os.path.join(exp, "transitions.parquet"))
+    by_role, by_team, validity, trend, recovery = offball.summarize(players, teams, lab, ball, sides, transitions)
+    out = offball.save(players, teams, by_role, by_team, info, validity, trend, recovery)
+    print("off-ball model: {} player-seconds, {} team-seconds in {:.0f}s -> {}".format(
+        len(players), len(teams), time.time() - t0, out))
+    print(by_team.round(3).to_string(index=False))
+    print(json.dumps(validity, indent=1))
+    print(json.dumps(recovery))
+
+
 def cmd_demo(args):
     import os
     import pandas as pd
@@ -387,6 +413,9 @@ def main():
     sub.add_parser("export").set_defaults(func=cmd_export)
     sub.add_parser("roles").set_defaults(func=cmd_roles)
     sub.add_parser("tactics").set_defaults(func=cmd_tactics)
+    p = sub.add_parser("offball")
+    p.add_argument("--every", type=int, default=25, help="frames between samples (25 = once per second)")
+    p.set_defaults(func=cmd_offball)
     p = sub.add_parser("demo")
     p.add_argument("--from", dest="minute_from", type=float, default=55)
     p.add_argument("--to", dest="minute_to", type=float, default=70)

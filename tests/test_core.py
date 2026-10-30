@@ -276,3 +276,55 @@ def test_label_runs_and_tag_side():
     lab2 = np.full(paths.N_FRAMES, "H", dtype="<U1")
     assert demo.tag_side({"side": None, "start": a}, lab2) == "H"      # no dead ball: 2 s later
     assert demo.tag_side({"side": "A", "start": a}, lab) == "A"
+
+
+def test_offball_control_and_candidates():
+    from sb import offball
+    cells = np.array([[10.0, 34.0], [95.0, 34.0]], dtype=np.float32)
+    home = np.array([[12.0, 34.0]], dtype=np.float32)
+    away = np.array([[93.0, 34.0]], dtype=np.float32)
+    zero = np.zeros_like(home)
+    s_h = offball.team_sum(offball.arrival(home, zero, cells))
+    s_a = offball.team_sum(offball.arrival(away, zero, cells))
+    ctrl = offball.control(s_h, s_a)
+    assert ctrl[0] > 0.95 and ctrl[1] < 0.05                 # each team owns the space next to it
+    assert abs(offball.control(s_h, s_h)[0] - 0.5) < 1e-6    # same arrival time: 50/50
+    assert len(offball.candidates()) == 17                   # stay + two rings of 8
+
+
+def test_threat_surface_prefers_the_goal_mouth():
+    from sb import offball
+    lab = np.full(paths.N_FRAMES, "D", dtype="<U1")
+    ball = np.full((paths.N_FRAMES, 2), np.nan, dtype=np.float32)
+    sides = {(t, h): True for t in (0, 1) for h in (1, 2)}
+    surf, prior, info = offball.threat_surface(lab, ball, sides)
+    assert info["samples"] == 0
+    assert surf[-1, surf.shape[1] // 2] > surf[0, 0]         # no data: the prior, goal mouth highest
+
+
+def test_shadow_block_moments_and_rows():
+    """Shadow Replay keeps an entry only when the defending team's denial before it was among its lowest;
+    rows below the gap threshold are dropped from the clip."""
+    import pandas as pd
+    from sb import demo
+    frames = list(range(1000, 1000 + 40 * 25, 25))
+    # H defends throughout (A has the ball); denial dips to 300 at frame 1500, otherwise 800
+    teams = pd.DataFrame({"frame": frames, "half": 1, "possession": "A",
+                          "J_H": [300.0 if f == 1500 else 800.0 for f in frames],
+                          "J_A": 100.0, "gap_H": 20.0, "gap_A": 0.0})
+    players = pd.DataFrame([
+        {"frame": 1500, "half": 1, "slot": 3, "team": "H", "label": "RB", "phase": "without ball", "contribution": 1.0,
+         "gain": 0.0, "best_gain": 40.0, "gap": 40.0, "shadow_score": 20.0, "shadow_x": 10.0, "shadow_y": 60.0, "x": 14.0, "y": 60.0},
+        {"frame": 1500, "half": 1, "slot": 4, "team": "H", "label": "LB", "phase": "without ball", "contribution": 1.0,
+         "gain": 0.0, "best_gain": 2.0, "gap": 2.0, "shadow_score": 60.0, "shadow_x": 10.0, "shadow_y": 8.0, "x": 10.0, "y": 9.0}])
+    entries = [[1600, "A", 30.0],          # 4 s after the dip: a moment
+               [1900, "A", 30.0]]          # denial normal in the 10 s before: not a moment
+    out = demo.shadow_block(players, teams, entries, {"RB": 0, "LB": 1}, 1000, 2000, [[0.1]])
+    assert len(out["moments"]) == 1
+    entry, low, defender, denial, top = out["moments"][0]
+    assert (entry, low, defender, denial) == (1600, 1500, "H", 300.0)
+    assert top[0][:2] == [0, 40.0]
+    i = out["teams"].index(next(r for r in out["teams"] if r[0] == 1500))
+    assert [p[2] for p in out["players"][i]] == [0]          # LB's 2-per-mille gap is dropped
+    assert out["usual"]["H"] == 800.0 and out["usual"]["A"] is None
+    assert demo.shadow_block(None, None, entries, {}, 1000, 2000, None) is None

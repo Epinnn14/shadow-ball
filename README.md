@@ -63,16 +63,24 @@ python run.py serve                     # prints the laptop and phone addresses
 Before kick-off the coach picks a formation (18 shapes), types names and numbers and adds his own
 player photos (kept on the laptop only; no photos are bundled). Names are matched to the tracked
 players by position (Hungarian assignment), so the chosen formation may differ from the detected one.
-The laptop then shows the full bench screen: the pitch with names, **Shadow Team** (the team's own
-learned defensive shape following the ball; players more than 10 m from their shadow are flagged),
-**Shadow Ball** (an uncertainty cloud when the ball is reconstructed), control zones, two advice maps
+The laptop then shows the full bench screen. The live pitch is kept plain (players, names, ball).
+Below it, the **Shadow pitch** is the core of the concept (`sb/offball.py`, once per second): the
+dangerous space each team controls (pitch control x a threat surface learned from the match), our
+share of it ("space denied" while defending, vs our usual), and for at most three of our off-ball
+players an arrow to the best position he could have reached in that second, with the share of the
+dangerous space it wins back. Only moves worth 1.5%+ and already there a second earlier are shown,
+so the pitch stays quiet while the shape holds. **Shadow Replay**: when the opponent enters our final
+third after our space denial fell into its lowest 35% in the previous 10 s, the Shadow pitch freezes
+for 7 s on that second (also on the phone) and the Copilot feed keeps it; the same moments for the
+opponent show where they leave space. **Shadow Ball** (the uncertainty cloud of a reconstructed ball)
+is drawn there too. Then two advice maps
 built from the last 30 s (attack: largest space in the opponent half and who runs into it; defence:
 the danger zone in our half, who shifts, and a lower line when the centre-backs tire), a fatigue map,
 a Copilot feed with a mini-pitch per event, and movement per player with a heatmap. On top:
-"Perlu diketahui", the three things that matter now, ranked from all modules (fatigue, counter-attacks,
-the channel the opponent uses, pressure, broken shape, line height, a dangerous opponent, a chance);
+"Need to know", the three things that matter now, ranked from all modules (fatigue, counter-attacks,
+the channel the opponent uses, pressure, space denial dropping, the last Shadow Replay, line height, a dangerous opponent, a chance);
 a momentum chart (minutes with the ball in each final third); and attack channels (final-third
-entries left/centre/right for both teams over 15 minutes). The phone also gets "Perlu diketahui". Two more cards: set pieces (every restart after a dead ball,
+entries left/centre/right for both teams over 15 minutes). The phone also gets "Need to know". Two more cards: set pieces (every restart after a dead ball,
 classified by where it is taken: corner, free kick in the final third, other free kick, throw-in,
 goal kick; whether the team kept the ball 10 s later and reached the box) and 1v1 duels (for each of
 our defenders, the opponent he meets most in our half over 10 minutes: how often that opponent is
@@ -94,6 +102,20 @@ events and the tactical camera often loses the ball in front of goal. A phone on
 hotspot opens the printed address and gets the pitch (upright) plus movement per position, and
 follows the laptop's clock. The clip is derived match data: it is served only from the laptop on
 the local network and never uploaded. No internet or CDN is needed.
+
+## Shadow Ball core: movement without the ball
+
+```bash
+python run.py offball                   # ~50 s: every off-ball player, every second of play
+```
+
+A pitch-control model (arrival times) weighted by a threat surface learned from the match gives one
+objective for both teams: the share of the dangerous space a team owns. With the ball you want it;
+without it you take it away ("space denied"). For every player off the ball, every second: his
+contribution (what the team loses without him), what his last second of movement was worth, and his
+**shadow**, the best position he could have reached. Validity: when the defending team denies the most
+dangerous space, the attackers reach the final third within 10 s in 20.8% of moments, against 30.9%
+when it denies the least (ball zone and team held fixed). See `experiments/2026-10-30_offball_shadow.md`.
 
 ## Third-party code
 

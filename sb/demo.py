@@ -21,6 +21,7 @@ far touchline):
               becomes known (the end of its 5-min block, or the turnover)
   stamina     Fatigue Risk Score per role and 5-min block
   transitions every turnover up to the end of the clip (for counter-press KPIs)
+  pressing    Pressing Trap Map seconds; leak: denial leak per role and 5-min block (pressing_and_leak)
   shadow      the off-ball core once per second: space denied, shadow positions, Shadow Replay
               moments (see shadow_block; null until `python run.py offball` has been run)
 """
@@ -216,6 +217,8 @@ def build(track, labels, ball, sigma, source, role_df, tactics_dir, minute_from=
     shadow = shadow_block(ob_players, ob_teams, entries, label_idx, first, last, surface,
                           pd.read_parquet(os.path.join(tactics_dir, "transitions.parquet")))
 
+    press_rows, leak_rows = pressing_and_leak(tactics_dir, label_idx, last)
+
     with open(os.path.join(tactics_dir, "formations.json")) as handle:
         formations = json.load(handle)
     return {
@@ -238,6 +241,7 @@ def build(track, labels, ball, sigma, source, role_df, tactics_dir, minute_from=
         "timeline": timeline, "events": events, "stamina": stam_rows, "transitions": tr_rows,
         "momentum": momentum, "entries": entries, "setpieces": setpieces,
         "match_events": events_st, "runs": runs, "team_running": running, "shadow": shadow,
+        "pressing": press_rows, "leak": leak_rows,
     }
 
 
@@ -492,6 +496,36 @@ def shadow_block(players, teams, entries, label_idx, first, last, surface, trans
                       for r in clip_t.itertuples()],
             "players": rows, "usual": usual, "usual_rest": usual_rest, "moments": moments,
             "surface": None if surface is None else np.round(np.asarray(surface), 3).tolist(), "surface_cell": 5.0}
+
+
+def pressing_and_leak(out_dir, label_idx, last):
+    """Pressing Trap Map seconds and Denial-leak blocks up to the end of the clip (the app builds its
+    tables from what is known at the current time):
+      pressing  [frame, defending (0 H / 1 A), band 0-3, lane 0-2, press, regain 5 s, box 10 s]
+                (zones in the DEFENDERS' attacking frame, see sb/pressing.py)
+      leak      [team, label idx, half, block start minute, seconds, contribution, gap,
+                 first-15-min contribution, first-15-min gap, fatigue risk, level], per mille;
+                known at the end of the block."""
+    from . import pressing
+    press_rows, leak_rows = None, None
+    p = os.path.join(out_dir, "pressing.parquet")
+    if os.path.exists(p):
+        d = pd.read_parquet(p)
+        d = d[d.frame <= last]
+        press_rows = [[int(r.frame), 0 if r.defending == "H" else 1, pressing.band_of(r.x), pressing.lane_of(r.y),
+                       int(r.press), int(r.regain), int(r.box)] for r in d.itertuples()]
+    p = os.path.join(out_dir, "offball_leak.parquet")
+    if os.path.exists(p):
+        d = pd.read_parquet(p)
+        half_of_last = int(paths.half_of_frames()[last])
+        d = d[[block_end(int(h), int(m)) <= last if h <= half_of_last else False for h, m in zip(d.half, d.block)]]
+        leak_rows = [[r.team, label_idx.get(r.label, -1), int(r.half), int(r.block), int(r.samples),
+                      round(float(r.contribution), 1), round(float(r.gap), 1),
+                      _num(r.base_contribution), _num(r.base_gap),
+                      None if pd.isna(getattr(r, "risk", np.nan)) else int(r.risk),
+                      getattr(r, "level", None) if isinstance(getattr(r, "level", None), str) else None]
+                     for r in d.itertuples()]
+    return press_rows, leak_rows
 
 
 def load_offball(out_dir):

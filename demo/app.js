@@ -338,6 +338,10 @@
         .map((r) => ({ role: r.label, player: (roleToPlayer[r.label] || {}).name || null, risk: r.risk, level: r.level })),
       duels: (S.duels || []).map((d) => ({ defender: (roleToPlayer[d.def] || {}).name || d.def, role: d.def, opponent: d.att, goal_side: Math.round(d.behind * 100) / 100 })),
       shadow: shadowSnapshot(f),
+      space_leaks: (S.leaks || []).slice(0, 4).map((r) => ({ player: nameOf(r.role), role: r.role, ratio_vs_first_15_min: Math.round(r.ratio * 10) / 10, flagged: r.flag, fatigue: r.risk, level: r.level })),
+      pressing: S.pressing ? { best_zone: S.pressing.best ? { where: P_BAND.H[S.pressing.best.band], won_back_press: Math.round(S.pressing.best.regP * 100), won_back_hold: Math.round(S.pressing.best.regH * 100) } : null,
+                               worst_zone: S.pressing.worst ? { where: P_BAND.H[S.pressing.worst.band], won_back_press: Math.round(S.pressing.worst.regP * 100), won_back_hold: Math.round(S.pressing.worst.regH * 100),
+                                                               box_press: Math.round(S.pressing.worst.boxP * 100), box_hold: Math.round(S.pressing.worst.boxH * 100) } : null } : null,
     };
     fetch('api/snapshot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(snap) }).catch(() => {});
   }
@@ -390,6 +394,9 @@
     $('repPrint').onclick = () => window.print();
     $('startBtn').onclick = closeSetup;
     $('shReplayClose').onclick = closeReplay;
+    document.querySelectorAll('#pressTabs button').forEach((b) => b.onclick = () => {
+      pressTeam = b.dataset.t; pressCache = ''; document.querySelectorAll('#pressTabs button').forEach((x) => x.classList.toggle('on', x === b)); pressingCard(videoFrame(S.t));
+    });
     addEventListener('resize', () => { buildViews(); panels(true); });
     addEventListener('keydown', (e) => {
       if (e.target.closest && e.target.closest('input')) return;
@@ -446,9 +453,10 @@
     }
     heatV = new PitchView($('heat'), { portrait: narrow(), x0: 0, x1: L, m: 1.5 });
     heatV.layout(Math.min(narrow() ? 300 : 300, $('pdetail').clientWidth || 300));
+    if (!narrow()) { pressV = new PitchView($('pressMap'), { x0: 0, x1: L, m: 1.5 }); pressV.layout($('pressCard').clientWidth - 28); }
     shV = new PitchView($('shadowPitch'), { portrait: narrow(), m: 2.5 });
     shV.layout($('shadowPitch').parentElement.clientWidth);
-    advCache = -1; heatCache = ''; S.feedKey = ''; shKey = '';
+    advCache = -1; heatCache = ''; S.feedKey = ''; shKey = ''; simKey = ''; pressCache = ''; leakCache = '';
   }
 
   // a 3 m grid painted as a small image, then stretched with smoothing onto the pitch.
@@ -757,13 +765,266 @@
     return { avg: n >= 10 ? sum / n : null, n, who: top(who), rest: nr >= 10 ? sr / nr : null, nr, cover: top(cover) };
   }
 
+  // ================================================================== Pressing traps (sb/pressing.py)
+  // Per zone, from kick-off to now: when the team pressed (2+ within 8 m of the ball) vs held its
+  // shape, how often it won the ball back within 5 s and how often the opponent reached its box
+  // within 10 s. Zones in the defenders' attacking frame; drawn in our view.
+  const P_BANDS = [0, L / 3, L / 2, 2 * L / 3, L];
+  // band names for our coach: our pressing (H frame) and theirs (A frame: their own third is deep in their half)
+  const P_BAND = { H: ['our third', 'our half', 'their half', 'their third'], A: ['their own third', 'their half', 'our half', 'our third'] };
+  const P_LANE = ['left', 'middle', 'right'];
+  let pressV, pressTeam = 'H', pressCache = '';
+  function pressZones(f, team) {
+    const t = team === 'H' ? 0 : 1, z = {};
+    for (const [fr, d, band, ln, press, regain, box] of C.pressing || []) {
+      if (fr > f || d !== t) continue;
+      const k = band * 3 + ln, s = z[k] || (z[k] = { band, lane: ln, np: 0, nh: 0, rp: 0, rh: 0, bp: 0, bh: 0 });
+      if (press) { s.np++; s.rp += regain; s.bp += box; } else { s.nh++; s.rh += regain; s.bh += box; }
+    }
+    for (const s of Object.values(z)) {
+      const k = s.np / (s.np + 20);                                   // shrink small samples
+      s.regP = s.np ? s.rp / s.np : null; s.regH = s.nh ? s.rh / s.nh : null; s.boxP = s.np ? s.bp / s.np : null; s.boxH = s.nh ? s.bh / s.nh : null;
+      s.ok = s.np >= 12 && s.nh >= 12;
+      s.dr = s.ok ? (s.regP - s.regH) * k : 0; s.db = s.ok ? (s.boxP - s.boxH) * k : 0;
+      s.kind = !s.ok ? 'few' : (s.db >= 0.03 || s.dr <= -0.05) ? 'leak' : (s.dr >= 0.05 && s.db <= 0.02) ? 'trap' : 'even';
+    }
+    return z;
+  }
+  function pressBands(f, team) {        // the same by band (all lanes): the headline
+    const out = [];
+    const z = pressZones(f, team);
+    for (let b = 0; b < 4; b++) {
+      const s = { band: b, np: 0, nh: 0, rp: 0, rh: 0, bp: 0, bh: 0 };
+      for (const v of Object.values(z)) if (v.band === b) { s.np += v.np; s.nh += v.nh; s.rp += v.rp; s.rh += v.rh; s.bp += v.bp; s.bh += v.bh; }
+      s.regP = s.np ? s.rp / s.np : 0; s.regH = s.nh ? s.rh / s.nh : 0; s.boxP = s.np ? s.bp / s.np : 0; s.boxH = s.nh ? s.bh / s.nh : 0;
+      s.ok = s.np >= 25 && s.nh >= 25; out.push(s);
+    }
+    return out;
+  }
+  // a zone's rectangle in OUR view: the defenders' frame is ours for H, flipped for A
+  function zoneRect(band, ln, team) {
+    let x0 = P_BANDS[band], x1 = P_BANDS[band + 1], y0 = ln * W / 3, y1 = (ln + 1) * W / 3;
+    if (team === 'A') [x0, x1, y0, y1] = [L - x1, L - x0, W - y1, W - y0];
+    return [x0, y0, x1, y1];
+  }
+  const pctR = (v) => (v == null ? '–' : Math.round(v * 100) + '%');
+  function pressingCard(f) {
+    if (narrow() || !pressV || !C.pressing) { if (!C.pressing && $('pressCard')) $('pressCard').hidden = true; return; }
+    const key = pressTeam + Math.floor((f - meta.first) / (10 * meta.fps)) + lineup.kitH;
+    if (key === pressCache) return; pressCache = key;
+    const v = pressV, g = v.ctx; v.begin();
+    const z = pressZones(f, pressTeam);
+    for (const s of Object.values(z)) {
+      const [x0, y0, x1, y1] = zoneRect(s.band, s.lane, pressTeam);
+      const col = s.kind === 'trap' ? COL.ok : s.kind === 'leak' ? COL.bad : '#9AA1AB';
+      const a = s.kind === 'few' ? 0.06 : s.kind === 'even' ? 0.1 : Math.min(0.55, 0.2 + Math.max(Math.abs(s.dr), Math.abs(s.db) * 2) * 2);
+      v.rect(x0 + 0.6, y0 + 0.6, x1 - 0.6, y1 - 0.6); g.fillStyle = hexA(col, a); g.fill();
+      if (s.kind === 'trap' || s.kind === 'leak') { g.strokeStyle = hexA(col, 0.9); g.lineWidth = 1.5; g.stroke(); }
+      const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+      if (s.ok) {
+        v.label(`${pctR(s.regP)} · ${pctR(s.regH)}`, cx, cy, -6, { size: 11, mono: true, pill: false, color: '#fff' });
+        v.label(s.kind === 'leak' && s.db >= 0.03 ? `box ${pctR(s.boxP)} · ${pctR(s.boxH)}` : `n ${s.np} · ${s.nh}`, cx, cy, 9, { size: 9, pill: false, color: 'rgba(255,255,255,.7)' });
+      } else v.label('few', cx, cy, 0, { size: 9, pill: false, color: 'rgba(255,255,255,.45)' });
+    }
+    const opp = (lineup.oppName || meta.teams.A).split(' ')[0], who = pressTeam === 'H' ? 'we' : opp;
+    const bands = pressBands(f, pressTeam).filter((b) => b.ok);
+    const best = bands.slice().sort((a, b) => (b.regP - b.regH) - (a.regP - a.regH))[0];
+    const worst = bands.slice().sort((a, b) => ((a.regP - a.regH) - 2 * (a.boxP - a.boxH)) - ((b.regP - b.regH) - 2 * (b.boxP - b.boxH)))[0];
+    const where = (b) => P_BAND[pressTeam][b.band];
+    $('pressTitle').textContent = best && best.regP > best.regH + 0.04 ? `${pressTeam === 'H' ? 'Press' : `${opp} press`} in ${where(best)}: won back ${pctR(best.regP)} vs ${pctR(best.regH)} holding` : 'No zone where pressing clearly pays yet';
+    $('pressSub').textContent = worst && worst !== best && (worst.regP < worst.regH - 0.04 || worst.boxP > worst.boxH + 0.02)
+      ? `${pressTeam === 'H' ? 'Hold' : `${opp} leak`} in ${where(worst)}: pressing there won it back ${pctR(worst.regP)} vs ${pctR(worst.regH)}, ball in ${pressTeam === 'H' ? 'our' : 'their'} box ${pctR(worst.boxP)} vs ${pctR(worst.boxH)}`
+      : `${who === 'we' ? 'We' : who} pressed ${Math.round(100 * bands.reduce((s, b) => s + b.np, 0) / Math.max(1, bands.reduce((s, b) => s + b.np + b.nh, 0)))}% of the time without the ball`;
+    S.pressing = pressTeam === 'H' ? { best, worst, zones: z } : S.pressing;
+  }
+  // the kind of OUR pressing zone a point (our view) falls in: for the Defend simulation
+  function ourPressZone(f, x, y) {
+    const z = pressZones(f, 'H'), band = x < P_BANDS[1] ? 0 : x < P_BANDS[2] ? 1 : x < P_BANDS[3] ? 2 : 3, ln = y < W / 3 ? 0 : y < 2 * W / 3 ? 1 : 2;
+    return z[band * 3 + ln] || null;
+  }
+
+  // ================================================================== Space leaks (fatigue -> denial)
+  // Per our position, the latest completed 5-min block: the dangerous space he leaves on the table
+  // per second while we defend (gap), against his own first 15 minutes of this half.
+  function leaks(f) {
+    const by = {};
+    for (const r of C.leak || []) {
+      const [team, li, half, block, n, contrib, gap, baseC, baseG, risk, level] = r;
+      if (team !== 'H' || half !== meta.half || blockEnd(half, block) > f || n < 30 || baseG == null || labels[li] === 'GK') continue;
+      (by[labels[li]] = by[labels[li]] || []).push({ block, n, gap, baseG, risk, level });
+    }
+    // the last 10 minutes (two completed blocks, weighted by seconds): one 5-min block is too noisy
+    const out = Object.entries(by).map(([role, bl]) => {
+      const last2 = bl.sort((a, b) => a.block - b.block).slice(-2), n = last2.reduce((s, b) => s + b.n, 0);
+      const gap = last2.reduce((s, b) => s + b.gap * b.n, 0) / n, cur = last2[last2.length - 1];
+      return { role, block: cur.block, gap, baseG: cur.baseG, risk: cur.risk, level: cur.level, ratio: gap / Math.max(1.5, cur.baseG), early: bl.length < 4 };
+    }).filter((r) => !r.early).sort((a, b) => b.gap - a.gap);         // most space left first (the back line)
+    for (const r of out) r.flag = r.ratio >= 1.5 && r.gap - r.baseG >= 8;     // 0.8+ points of the dangerous space per second
+    return out;
+  }
+  let leakCache = '';
+  function leakCard(f) {
+    if (narrow() || !C.leak) { if (!C.leak && $('leakCard')) $('leakCard').hidden = true; S.leaks = []; return; }
+    const rows = leaks(f); S.leaks = rows;
+    const key = rows.map((r) => r.role + r.block).join('|') + lineup.kitH;
+    if (key === leakCache) return; leakCache = key;
+    const max = Math.max(3, ...rows.map((r) => Math.max(r.gap, r.baseG)));
+    $('leakList').innerHTML = rows.length ? rows.slice(0, 6).map((r) => {
+      const pl = roleToPlayer[r.role];
+      return `<div class="lk${r.flag ? ' flag' : ''}">${avatar(pl, 'H', r.role)}
+        <span class="who"><b>${esc(nameOf(r.role))}</b><span>${r.role} · <i style="background:${LEVEL[r.level] || LEVEL['no data']}"></i>${r.risk != null ? 'fatigue ' + r.risk : 'no fatigue data'}</span></span>
+        <span class="bars" title="space left per second: first 15 min vs last block"><i style="width:${(r.baseG / max * 100).toFixed(0)}%"></i><i class="now" style="width:${(r.gap / max * 100).toFixed(0)}%"></i></span>
+        <em>${r.ratio.toFixed(1)}×</em></div>`;
+    }).join('') : '<p class="empty">The first blocks of this half are the baseline: leaks show from minute 15 of the half.</p>';
+  }
+
+  // ================================================================== simulation cards (Attack / Defend)
+  // The off-ball model run forward: from a real second of the last 30 s, up to 4 of our players move
+  // TOGETHER (each within 5 m, about one second of running), chosen greedily so that every move
+  // counts the moves already made: a unit shift, not 4 separate tips. Defend = our weakest second
+  // while they had the ball (lowest space denied); Attack = our latest second with the ball, with
+  // what the moves cost the rest defence. The card loops: now -> simulated -> now.
+  const SIM_OFFS = [[0, 0]];
+  for (const r of [2.5, 5]) for (let k = 0; k < 8; k++) SIM_OFFS.push([r * Math.cos(k * Math.PI / 4), r * Math.sin(k * Math.PI / 4)]);
+  let simCells = null, simKey = '', lastSim = 0, sims = { atk: null, def: null };
+  function simGrid() {
+    if (simCells) return simCells;
+    const pts = []; for (let x = 1.5; x < L; x += 3) for (let y = 1.5; y < W; y += 3) pts.push([x, y]);
+    return (simCells = pts);
+  }
+  function valueFor(att, ball) {       // the threat surface seen from `att`'s attack, weighted towards the ball
+    const cells = simGrid(), nx = SH.surf.length, ny = SH.surf[0].length, v = new Float64Array(cells.length);
+    let sum = 0;
+    cells.forEach(([x, y], i) => {
+      const ax = att === 'H' ? x : L - x, ay = att === 'H' ? y : W - y;
+      v[i] = SH.surf[Math.max(0, Math.min(nx - 1, Math.floor(ax / SH.cell)))][Math.max(0, Math.min(ny - 1, Math.floor(ay / SH.cell)))] *
+        (ball ? 0.5 + 0.5 * Math.exp(-Math.hypot(x - ball.x, y - ball.y) / 25) : 1);
+      sum += v[i];
+    });
+    for (let i = 0; i < v.length; i++) v[i] /= sum;
+    return v;
+  }
+  function expArr(x, y) {
+    const cells = simGrid(), e = new Float64Array(cells.length);
+    for (let i = 0; i < cells.length; i++) e[i] = Math.exp(-(REACT + Math.hypot(x - cells[i][0], y - cells[i][1]) / VMAX) / SOFT);
+    return e;
+  }
+  function ownJ(v, sH, tA) {          // our share of the space valued by v
+    let j = 0;
+    for (let i = 0; i < v.length; i++) j += v[i] / (1 + Math.exp(-(tA[i] + SOFT * Math.log(Math.max(sH[i], 1e-300))) / TEMP));
+    return j;
+  }
+  function simulateUnit(ps, ball, att, maxMoves = 4) {
+    const cells = simGrid(), n = cells.length, v = valueFor(att, ball), vRest = att === 'H' ? valueFor('A', ball) : null;
+    const E = ps.map((p) => expArr(p.x, p.y)), sH = new Float64Array(n), sA = new Float64Array(n);
+    ps.forEach((p, k) => { const s = p.team === 'H' ? sH : sA; for (let i = 0; i < n; i++) s[i] += E[k][i]; });
+    const tA = sA.map((s) => -SOFT * Math.log(Math.max(s, 1e-300)));
+    let carrier = -1;
+    if (att === 'H' && ball) { let bd = 3; ps.forEach((p, k) => { if (p.team === 'H') { const d = Math.hypot(p.x - ball.x, p.y - ball.y); if (d < bd) { bd = d; carrier = k; } } }); }
+    const movable = ps.map((p, k) => k).filter((k) => ps[k].team === 'H' && ps[k].role !== 'GK' && k !== carrier);
+    const before = ownJ(v, sH, tA), restBefore = vRest ? ownJ(vRest, sH, tA) : null;
+    let cur = before; const moves = [], moved = new Set(), pos = ps.map((p) => ({ x: p.x, y: p.y }));
+    const trial = new Float64Array(n);
+    for (let step = 0; step < maxMoves; step++) {
+      let best = null;
+      for (const k of movable) {
+        if (moved.has(k)) continue;
+        for (let o = 1; o < SIM_OFFS.length; o++) {
+          const x = Math.max(0.5, Math.min(L - 0.5, pos[k].x + SIM_OFFS[o][0])), y = Math.max(0.5, Math.min(W - 0.5, pos[k].y + SIM_OFFS[o][1]));
+          const e = expArr(x, y);
+          for (let i = 0; i < n; i++) trial[i] = sH[i] - E[k][i] + e[i];
+          const j = ownJ(v, trial, tA);
+          if (!best || j > best.j) best = { k, x, y, j, e };
+        }
+      }
+      if (!best || best.j - cur < 0.004) break;          // under 0.4 points: not worth a call
+      for (let i = 0; i < n; i++) sH[i] += best.e[i] - E[best.k][i];
+      E[best.k] = best.e; moved.add(best.k);
+      moves.push({ role: ps[best.k].role, x: ps[best.k].x, y: ps[best.k].y, sx: best.x, sy: best.y, gap: (best.j - cur) * 1000, team: 'H', kind: 'shadow' });
+      pos[best.k] = { x: best.x, y: best.y }; cur = best.j;
+    }
+    const ps2 = ps.map((p, k) => Object.assign({}, p, pos[k]));
+    return { before, after: cur, restBefore, restAfter: vRest ? ownJ(vRest, sH, tA) : null, moves, ps2 };
+  }
+
+  function pickSecond(f, poss, mode) {
+    const i = shIdx(f); if (i < 0) return null;
+    let pick = null;
+    for (let j = i; j >= 0 && SH.frames[j] > f - 30 * meta.fps; j--) {
+      if (SH.rows[j][1] !== poss) continue;
+      if (mode === 'latest') return j;
+      if (!pick || SH.rows[j][2] < SH.rows[pick][2]) pick = j;       // lowest share of the dangerous space we own
+    }
+    return pick;
+  }
+  function simCards() {
+    if (narrow() || !SH.surf || !advA) return;
+    const f = videoFrame(S.t), jd = pickSecond(f, 'A', 'worst'), ja = pickSecond(f, 'H', 'latest');
+    const key = `${jd}|${ja}|${lineup.kitH}`;
+    if (key === simKey || (simKey && performance.now() - lastSim < 700)) return;     // at 10x: at most ~1.5 runs a second
+    simKey = key; lastSim = performance.now();
+    for (const [side, j, att] of [['def', jd, 'A'], ['atk', ja, 'H']]) {
+      if (j == null) { sims[side] = null; continue; }
+      const { ps, ball } = frameState(SH.frames[j]), r = simulateUnit(ps, ball, att);
+      sims[side] = Object.assign(r, { ps, ball, frame: SH.frames[j], att, t0: performance.now(),
+        paintNow: dangerCells(ps, att, ball), paintSim: dangerCells(r.ps2, att, ball) });
+    }
+    const list = (s) => s.moves.map((m) => `${nameOf(m.role)} ${moveText(m)}`).join(' · ');
+    const d = sims.def, a = sims.atk, el = (id) => $(id).querySelector('.adv-text');
+    if (!d) { el('advDef').querySelector('b').textContent = 'No defending moment in the last 30 s'; el('advDef').querySelector('span').textContent = ''; }
+    else {
+      el('advDef').querySelector('b').textContent = d.moves.length ? `Shift ${d.moves.length} together: space denied ${pctM(d.before * 1000)} → ${pctM(d.after * 1000)}` : `Shape holds: space denied ${pctM(d.before * 1000)}`;
+      const pz = d.ball && C.pressing ? ourPressZone(d.frame, d.ball.x, d.ball.y) : null;
+      el('advDef').querySelector('span').textContent = `Weakest moment ${clockText(d.frame)}` + (d.moves.length ? ` · ${list(d)}` : ' · no unit move gains 0.4 points') +
+        (pz && pz.kind === 'trap' ? ` · or press: ball in a trap zone (won back ${pctR(pz.regP)} vs ${pctR(pz.regH)})` : pz && pz.kind === 'leak' ? ' · do not press here: a leak zone' : '');
+    }
+    if (!a) { el('advAtk').querySelector('b').textContent = 'No attacking moment in the last 30 s'; el('advAtk').querySelector('span').textContent = ''; }
+    else {
+      el('advAtk').querySelector('b').textContent = a.moves.length ? `Get open: space owned ${pctM(a.before * 1000)} → ${pctM(a.after * 1000)}` : `No better runs: space owned ${pctM(a.before * 1000)}`;
+      el('advAtk').querySelector('span').textContent = `${clockText(a.frame)}` + (a.moves.length ? ` · ${list(a)}` : '') +
+        (a.restBefore != null ? ` · rest defence ${pctM(a.restBefore * 1000)} → ${pctM(a.restAfter * 1000)}` : '');
+    }
+    $('advAtk').querySelector('header .muted').textContent = 'simulated · last 30 s';
+    $('advDef').querySelector('header .muted').textContent = 'simulated · weakest moment, last 30 s';
+  }
+  // now (1.6 s) -> glide (1 s) -> simulated (1.8 s) -> glide back (0.6 s)
+  function simPhase(t) { const s = (t % 5000) / 1000; return s < 1.6 ? 0 : s < 2.6 ? (s - 1.6) : s < 4.4 ? 1 : 1 - (s - 4.4) / 0.6; }
+  function drawSims() {
+    if (narrow() || !SH.surf || !advA) return;
+    for (const [v, s] of [[advD, sims.def], [advA, sims.atk]]) {
+      const g = v.ctx; v.begin();
+      if (!s) continue;
+      const raw = simPhase(performance.now() - s.t0), k = raw * raw * (3 - 2 * raw);
+      g.save(); g.globalAlpha = 1 - k; paintCells(v, s.paintNow); g.globalAlpha = k; paintCells(v, s.paintSim); g.restore();
+      const mv = new Map(s.moves.map((m) => [m.role, m]));
+      for (const m of s.moves) if (k < 0.5) {     // where they are going
+        const [a, b] = v.S(m.sx, m.sy); g.save(); g.globalAlpha = 1 - 2 * k;
+        g.beginPath(); g.arc(a, b, 6, 0, 7); g.setLineDash([3, 3]); g.strokeStyle = '#D9CCFF'; g.lineWidth = 1.5; g.stroke(); g.setLineDash([]);
+        v.arrow(m.x, m.y, m.sx, m.sy, COL.shadow, 2); g.restore();
+      }
+      for (let i = 0; i < s.ps.length; i++) {
+        const p = s.ps[i], q = s.ps2[i], x = p.x + (q.x - p.x) * k, y = p.y + (q.y - p.y) * k, [a, b] = v.S(x, y);
+        g.beginPath(); g.arc(a, b, 4.8, 0, 7); g.fillStyle = p.team === 'H' ? lineup.kitH : lineup.kitA; g.globalAlpha = p.team === 'H' ? 1 : 0.75; g.fill(); g.globalAlpha = 1;
+        g.strokeStyle = 'rgba(255,255,255,.85)'; g.lineWidth = 1; g.stroke();
+        if (mv.has(p.role) && p.team === 'H') { g.beginPath(); g.arc(a, b, 8, 0, 7); g.strokeStyle = COL.shadow; g.lineWidth = 2; g.stroke(); v.label(nameOf(p.role), x, y, -15, { size: 9.5, bg: 'rgba(30,18,60,.85)' }); }
+      }
+      if (s.ball) drawBall(v, s.ball, false);
+      // state pill, screen corner
+      const val = s.before + (s.after - s.before) * k, sim = k >= 0.5;
+      const text = `${sim ? 'SIMULATED' : 'NOW'} · ${s.att === 'A' ? 'denied' : 'owned'} ${pctM(val * 1000)}`;
+      g.font = `700 11px ${CSS.getPropertyValue('--sans')}`; const w = g.measureText(text).width + 16;
+      g.fillStyle = sim ? 'rgba(167,139,250,.92)' : 'rgba(10,11,13,.78)'; roundRect(g, 8, 8, w, 22, 11); g.fill();
+      g.fillStyle = sim ? '#120D22' : '#F1F3F6'; g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillText(text, 16, 19.5);
+    }
+  }
+
   // ================================================================== advice maps (last 30 s)
   let advCache = -1;
   function windowSamples(idx) { const out = []; for (let i = Math.max(0, idx - 150); i <= idx; i += 5) { const ps = framePlayers(i); ps.poss = C.frames[i][1]; out.push(ps); } return out; }
   const nameOf = (role) => { const p = roleToPlayer[role]; return p ? shortName(p) : role; };
 
   function advice(st) {
-    const draw = !narrow() && advA && advD;
+    const draw = !narrow() && advA && advD && !SH.surf;      // with the off-ball model the cards are simulations (simCards)
     const bucket = Math.floor(S.t / 2);
     if (bucket === advCache) return; advCache = bucket;
     const samples = windowSamples(st.idx), cell = 5, f = videoFrame(S.t);
@@ -785,8 +1046,8 @@
       if (runner && best) v.arrow(runner.p.x, runner.p.y, best.x, best.y, '#fff', 2.5);
     });
     const atk = $('advAtk').querySelector('.adv-text');
-    atk.querySelector('b').textContent = best ? `Attack down the ${lane(best.y)}` : 'Waiting for data';
-    atk.querySelector('span').textContent = best ? `${Math.round(best.v)} m from the nearest opponent` + (runner ? ` · ${nameOf(runner.p.role)} runs into it` : '') +
+    if (!SH.surf) atk.querySelector('b').textContent = best ? `Attack down the ${lane(best.y)}` : 'Waiting for data';
+    if (!SH.surf) atk.querySelector('span').textContent = best ? `${Math.round(best.v)} m from the nearest opponent` + (runner ? ` · ${nameOf(runner.p.role)} runs into it` : '') +
       (oppLine ? ` · their line ${Math.round(L - oppLine)} m from their goal` : '') : '';
     // ---------- defence: where the opponent is and we are not
     const danger = []; let worst = null;
@@ -818,6 +1079,7 @@
               defLane: worst ? lane(worst.y) : null, mover: mover ? mover.p.role : null, dropTo, ourLine, tiredCB };
     simulate(samples, st);
     const def = $('advDef').querySelector('.adv-text');
+    if (SH.surf) return;
     def.querySelector('b').textContent = worst ? `Close the ${lane(worst.y)}` : 'Waiting for data';
     def.querySelector('span').textContent = (mover ? `${nameOf(mover.p.role)} shifts ${Math.max(0, Math.round(mover.d - 3))} m` : '') +
       (dropTo ? ` · drop the line ${Math.round(ourLine - dropTo)} m (${tiredCB.join(' + ')} tiring)` : ourLine ? ` · our line ${Math.round(ourLine)} m` : '');
@@ -1105,6 +1367,17 @@
     if (den && ur && den.rest != null && den.rest < ur - 60) items.push({ score: 69, color: COL.warn,
       title: den.cover ? `Thin rest defence: keep ${nameOf(den.cover)} back` : 'Thin rest defence when we attack',
       sub: `If we lose the ball: we own ${pctM(den.rest)} of our dangerous space, last 2 min (usual ${pctM(ur)})` });
+    const lk = (S.leaks || []).filter((r) => r.flag).sort((a, b) => b.ratio - a.ratio)[0];
+    if (lk) {
+      const tired = lk.level === 'red' || lk.level === 'amber';
+      items.push({ score: tired ? 86 : 70, color: COL.bad, title: tired ? `Sub candidate: ${nameOf(lk.role)} is leaking space` : `${nameOf(lk.role)} is leaking space`,
+        sub: `${lk.ratio.toFixed(1)}× the dangerous space he left early in the half (last 10 min)` + (lk.risk != null ? ` · fatigue ${lk.risk}` : '') });
+    }
+    const pr = S.pressing;
+    if (pr && pr.worst && pr.worst !== pr.best && (pr.worst.regP < pr.worst.regH - 0.04 || pr.worst.boxP > pr.worst.boxH + 0.02))
+      items.push({ score: 52, color: COL.warn, title: `Hold, don't press, in ${P_BAND.H[pr.worst.band]}`, sub: `Pressing there won it back ${pctR(pr.worst.regP)} vs ${pctR(pr.worst.regH)} holding` });
+    else if (pr && pr.best && pr.best.regP > pr.best.regH + 0.04)
+      items.push({ score: 48, color: COL.ok, title: `Press in ${P_BAND.H[pr.best.band]}`, sub: `Won back ${pctR(pr.best.regP)} within 5 s vs ${pctR(pr.best.regH)} holding` });
     const lastRep = SH.moments.filter((m) => m[2] === 'H' && m[0] <= f && m[0] > f - 90 * meta.fps).pop();
     const repMv = lastRep && momentMoves(lastRep)[0];
     if (repMv) {
@@ -1195,6 +1468,7 @@
     if (!v) return;
     const bucket = Math.floor(S.t / 5);
     if (bucket !== duelCache || force) { S.duels = computeDuels(st); duelCache = bucket; }
+    v.c.style.display = S.duels.length ? '' : 'none';      // no empty pitch while there is nothing to show
     const g = v.ctx; v.begin();
     const color = (dg) => (dg >= 0.35 ? COL.bad : dg >= 0.2 ? COL.warn : COL.ok);
     for (const dl of S.duels) {
@@ -1207,7 +1481,7 @@
     el.innerHTML = S.duels.length ? S.duels.sort((a, b) => b.danger - a.danger).map((dl) => `<div class="duel">
         <i style="background:${color(dl.danger)}"></i><b>${esc(nameOf(dl.def))}</b><span>vs ${dl.att} ${esc(opp)}</span>
         <em>goal-side ${Math.round(dl.behind * 100)}%${dl.races >= 5 ? ` · races lost ${dl.lost}/${dl.races}` : ''}</em></div>`).join('')
-      : '<p class="empty">Not enough duels in our half yet.</p>';
+      : '<p class="empty">Not enough duels in our half yet: the map appears after about 20 s of 1v1s near our goal.</p>';
   }
 
   // ================================================================== one-page report
@@ -1343,16 +1617,20 @@
   function planCard(f) {
     const DEC = window.SB_DECIDE, fat = latestStamina(f);
     const tired = Object.values(fat).filter((r) => r.team === 'H' && r.half === meta.half && r.level === 'red' && r.label !== 'GK')
-      .sort((a, b) => b.risk - a.risk).map((r) => ({ role: r.label, risk: r.risk, label: nameOf(r.label) }));
+      .sort((a, b) => b.risk - a.risk).map((r) => { const lk = (S.leaks || []).find((x) => x.role === r.label); return { role: r.label, risk: r.risk, label: nameOf(r.label), space: lk ? lk.ratio : null }; });
     const badDuel = (S.duels || []).filter((d) => d.danger >= 0.3).sort((a, b) => b.danger - a.danger)[0];
     const subs = {}, needsOf = {};
     for (const t of tired) { needsOf[t.role] = DEC.needsFor(t.role, 'fatigue'); subs[t.role] = DEC.recommend(lineup.squad, lineup.xi, slotOf(t.role), needsOf[t.role]); }
     if (badDuel) { needsOf[badDuel.def] = DEC.needsFor(badDuel.def, 'duel'); subs[badDuel.def] = DEC.recommend(lineup.squad, lineup.xi, slotOf(badDuel.def), needsOf[badDuel.def]); }
+    // a position that leaks dangerous space and is tiring (Space leaks card)
+    const lkr = (S.leaks || []).filter((r) => r.flag && (r.level === 'red' || r.level === 'amber')).sort((a, b) => b.ratio - a.ratio)[0];
+    const leak = lkr ? { role: lkr.role, label: nameOf(lkr.role), ratio: lkr.ratio, risk: lkr.risk } : null;
+    if (leak && !subs[leak.role]) { needsOf[leak.role] = DEC.needsFor(leak.role, 'line'); subs[leak.role] = DEC.recommend(lineup.squad, lineup.xi, slotOf(leak.role), needsOf[leak.role]); }
     const tr = C.transitions.filter((t) => t.frame <= f && t.won_by === 'A');
     const rate = (h) => { const x = tr.filter((t) => t.half === h); return x.length >= 4 ? x.filter((t) => t.regained).length / x.length : null; };
     const dangerA = C.transitions.filter((t) => t.won_by === 'A' && t.dangerous && t.frame <= f && t.frame > f - 10 * 60 * meta.fps).length;
     const sim = S.sim || {};
-    S.plan = DEC.planB({ tired, badDuel: badDuel && { def: badDuel.def, att: badDuel.att, behind: badDuel.behind }, subs,
+    S.plan = DEC.planB({ tired, leak, badDuel: badDuel && { def: badDuel.def, att: badDuel.att, behind: badDuel.behind }, subs,
       drop: sim.drop, backFive: sim.backFive, oppLane: sim.oppLane, oppShare: sim.oppShare, dangerA,
       regainNow: meta.half === 2 ? rate(2) : null, regainH1: meta.half === 2 ? rate(1) : null,
       atkLane: S.adv && S.adv.atkLane, atkFree: S.adv && S.adv.atkFree });
@@ -1403,7 +1681,7 @@
   let last = performance.now(), lastPanel = -1;
   function panels(force) {
     const st = interp(S.t), f = videoFrame(S.t), si = Math.max(0, Math.min(C.seconds.frames.length - 1, Math.floor(S.t)));
-    squad(st, f, si, force); strip(f); advice(st);
+    squad(st, f, si, force); strip(f); advice(st); pressingCard(f); leakCard(f); simCards();
     if (!narrow()) { feed(f); fatigueMap(f); stats(f, si); momentumChart(f); channels(f, st); setPieces(f); duels(st); }
     planCard(f);
     postSnapshot(f);
@@ -1417,6 +1695,7 @@
     drawMain(st);
     replayTrigger(st.frame);
     drawShadow();
+    drawSims();
     $('scrub').value = S.t;
     $('playBtn').classList.toggle('on', S.playing);
     $('clock').textContent = clockText(st.frame);

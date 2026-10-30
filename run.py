@@ -239,12 +239,27 @@ def cmd_offball(args):
     transitions = pd.read_parquet(os.path.join(exp, "transitions.parquet"))
     by_role, by_team, validity, trend, recovery = offball.summarize(players, teams, lab, ball, sides, transitions)
     rest = offball.rest_validity(teams, lab, ball, sides, transitions)
-    out = offball.save(players, teams, by_role, by_team, info, validity, trend, recovery, rest)
+    stamina = pd.read_parquet(os.path.join(exp, "stamina.parquet")) if os.path.exists(os.path.join(exp, "stamina.parquet")) else None
+    leak, leak_rel = offball.leak_blocks(players, stamina)
+    out = offball.save(players, teams, by_role, by_team, info, validity, trend, recovery, rest, leak, leak_rel)
+    # Pressing Trap Map (same run: it needs the same labels, ball and roles)
+    from sb import pressing
+    from sb.tactics import assigned_slots
+    valid = assigned_slots(role_df, *track.xy.shape[:2])
+    gk = np.zeros_like(valid)
+    g = role_df[role_df.label == "GK"]
+    gk[g.frame.to_numpy(), g.slot.to_numpy()] = True
+    press = pressing.seconds(track, lab, ball, valid, gk, sides)
+    bands = pressing.band_table(press)
+    pressing.save(press, pressing.zone_table(press), bands)
     print("off-ball model: {} player-seconds, {} team-seconds in {:.0f}s -> {}".format(
         len(players), len(teams), time.time() - t0, out))
     print(by_team.round(3).to_string(index=False))
     print(json.dumps(validity, indent=1))
     print("rest defence:", json.dumps(rest, indent=1))
+    print("fatigue vs denial:", json.dumps(leak_rel, indent=1))
+    print("pressing ({} s, {:.0%} pressed):".format(len(press), press.press.mean()))
+    print(bands.to_string(index=False))
     print(json.dumps(recovery))
 
 

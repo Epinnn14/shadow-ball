@@ -87,6 +87,9 @@ Data is looked up in: `MTAH_DATA_DIR` -> `./data` -> `../Dataset Drive`.
   Rest defence (team WITH the ball): the same J valued from the opponent's side, as if the ball were lost now;
   cover shadow per player (`rest_gap`, `cover_x/y`). Validated: entry against in 15 s 6.1% vs 12.9% (6/6 strata);
   the count of players behind the ball fails.
+- `sb/pressing.py` — Pressing Trap Map (run by `offball`): per defending second, press = 2+ within 8 m; regain 5 s /
+  box 10 s, press vs hold per zone (4 bands x 3 lanes, defenders' frame). Not causal. `offball.leak_blocks` = Space
+  leaks: gap per role per 5-min block vs its first 15 min (fatigue score does not predict it, r ~ 0); demo uses 10 min.
 - `scripts/broadcast_probe.py` — broadcast tracking aligned to tactical (offsets 4015 / 26919 frames, matched by
   player positions); fills ~8% of the missing ball frames. Candidate for a v5 after Phase C.
 - `sb/export.py` — contract files in `exports/` (derived data, not committed).

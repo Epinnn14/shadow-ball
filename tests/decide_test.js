@@ -32,4 +32,14 @@ assert.strictEqual(plan[plan.length - 1].kind, 'attack');
 const worse = { metric: 'x', before: 0.33, after: 0.34 }, better = { metric: 'x', before: 0.33, after: 0.25 };
 assert.ok(!D.planB({ backFive: { side: 'left', effect: worse }, dangerA: 3 }).some((o) => o.kind === 'shape'));
 assert.ok(D.planB({ backFive: { side: 'left', effect: better }, dangerA: 3 }).some((o) => o.kind === 'shape'));
+// a leaking, tiring role is the first substitution, and is not proposed twice
+const leakPlan = D.planB({ tired: [{ role: 'LCB', risk: 66 }], leak: { role: 'LCB', ratio: 2.4, risk: 66 }, subs: { LCB: recs } });
+assert.strictEqual(leakPlan[0].kind, 'sub');
+assert.ok(/2\.4x/.test(leakPlan[0].why));
+assert.strictEqual(leakPlan.filter((o) => o.kind === 'sub').length, 1);
+// a tired player who still holds his space is a lower priority than one who does not
+const holdSub = D.planB({ tired: [{ role: 'LCB', risk: 60, space: 0.9 }], subs: { LCB: recs } })[0];
+const tiredSub = D.planB({ tired: [{ role: 'LCB', risk: 60, space: 1.4 }], subs: { LCB: recs } })[0];
+assert.ok(/still holding/.test(holdSub.why) && !/still holding/.test(tiredSub.why));
+assert.ok(holdSub.score < tiredSub.score);
 console.log('decide.js: all tests passed');

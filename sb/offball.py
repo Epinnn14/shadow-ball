@@ -371,16 +371,55 @@ def rest_validity(teams, lab, ball, sides, transitions=None, horizon=15 * FPS):
     return out
 
 
-def save(players, teams, by_role, by_team, info, validity, trend=None, recovery=None, rest=None):
+def leak_blocks(players, stamina=None, min_samples=30):
+    """Denial leak per role: every 5-min block, while the team defends, the dangerous space the role
+    holds (contribution) and the space it leaves on the table (gap, best reachable position minus
+    actual), next to the same role's first 15 minutes of that half; with its Fatigue Risk Score.
+    Returns (blocks, fatigue_vs_denial) -- the second says whether running data alone tells who leaks."""
+    q = players[players.phase == "without ball"]
+    starts = {h: paths.HALVES[h - 1][0] for h in (1, 2)}
+    minute = (q.frame - q.half.map(starts)) / FPS / 60 + np.where(q.half == 1, 0, 45)
+    q = q.assign(block=(minute // 5 * 5).astype(int))
+    b = q.groupby(["team", "label", "half", "block"]).agg(samples=("gap", "size"), contribution=("contribution", "mean"),
+                                                          gap=("gap", "mean")).reset_index()
+    base_c, base_g = [], []
+    for r in b.itertuples():
+        first = b[(b.team == r.team) & (b.label == r.label) & (b.half == r.half)]
+        first = first[first.block < first.block.min() + 15]
+        w = first.samples.sum()
+        base_c.append(float((first.contribution * first.samples).sum() / w) if w else np.nan)
+        base_g.append(float((first.gap * first.samples).sum() / w) if w else np.nan)
+    b["base_contribution"], b["base_gap"] = base_c, base_g
+    rel = {}
+    if stamina is not None and len(stamina):
+        m = b.merge(stamina[["team", "label", "half", "minute_from", "risk", "level"]].rename(columns={"minute_from": "block"}),
+                    on=["team", "label", "half", "block"], how="left")
+        b = m
+        ok = m[(m.samples >= min_samples) & m.risk.notna() & (m.base_contribution > 0)]
+        ratio = ok.contribution / ok.base_contribution
+        corr = lambda u, v: round(float(np.corrcoef(u, v)[0, 1]), 3) if len(ok) >= 3 else None
+        rel = {"blocks": int(len(ok)),
+               "corr_risk_vs_contribution_ratio": corr(ok.risk, ratio),
+               "corr_risk_vs_gap": corr(ok.risk, ok.gap),
+               "by_level": {lvl: {"blocks": int(len(g)), "median_contribution_ratio": round(float((g.contribution / g.base_contribution).median()), 3),
+                                  "median_gap": round(float(g.gap.median()), 2)}
+                            for lvl, g in ok.groupby("level")}}
+    return b, rel
+
+
+def save(players, teams, by_role, by_team, info, validity, trend=None, recovery=None, rest=None, leak=None, leak_rel=None):
     out = os.path.join(paths.REPO, "exports")
     os.makedirs(out, exist_ok=True)
     players.to_parquet(os.path.join(out, "offball.parquet"), index=False)
     teams.to_parquet(os.path.join(out, "offball_team.parquet"), index=False)
     by_role.to_parquet(os.path.join(out, "offball_roles.parquet"), index=False)
+    if leak is not None:
+        leak.to_parquet(os.path.join(out, "offball_leak.parquet"), index=False)
     summary = {"by_team": by_team.round(4).to_dict("records"), "validity": validity, "threat": info["threat"],
                "recovery_after_losing_the_ball": recovery or {},
                "denial_by_5min": [] if trend is None else trend.to_dict("records"),
                "rest_defence": rest or {},
+               "fatigue_vs_denial": leak_rel or {},
                "threat_surface": info["surface"]}
     with open(os.path.join(out, "offball_summary.json"), "w") as handle:
         json.dump(summary, handle, indent=1)

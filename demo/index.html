@@ -121,6 +121,21 @@
     </div>
 
     <div class="advice desk">
+      <article class="adv" id="pressCard">
+        <header><span class="tag neutral">Pressing traps</span>
+          <div class="seg" id="pressTabs"><button type="button" data-t="H" class="on" id="pressUs">Us</button><button type="button" data-t="A" id="pressThem">Them</button></div></header>
+        <canvas id="pressMap"></canvas>
+        <div class="adv-text"><b id="pressTitle"></b><span id="pressSub"></span></div>
+        <div class="sp-legend"><span><i class="zsw trap"></i>trap: pressing wins it back</span><span><i class="zsw leak"></i>leak: pressing opens the way</span><span>won back in 5 s: press · hold</span></div>
+      </article>
+      <article class="adv" id="leakCard">
+        <header><span class="tag def">Space leaks</span><span class="muted small">per position · last 10 min vs first 15 min</span></header>
+        <div class="leaks" id="leakList"></div>
+        <p class="note">Measured on the space itself: the dangerous space each player leaves on the table while we defend. Running data alone does not show this.</p>
+      </article>
+    </div>
+
+    <div class="advice desk">
       <article class="adv" id="spCard">
         <header><span class="tag neutral">Set pieces</span><span class="muted small">since kick-off · Smart Tagging</span></header>
         <canvas id="spMap"></canvas>

@@ -82,7 +82,12 @@ from a real second of the last 30 s, up to 4 of our players move together (each 
 greedily so each move counts the ones already made. Defend = our weakest second while they had the
 ball (space denied before -> after); Attack = our latest second with the ball (space owned before ->
 after, and what it costs the rest defence). Each card loops now -> simulated. Without the off-ball
-outputs they fall back to the 30 s heat maps. Then a fatigue map,
+outputs they fall back to the 30 s heat maps. The Defend card also says when the ball is in one of
+our pressing trap (or leak) zones. **Pressing traps**: per zone, how often pressing won the ball back
+within 5 s vs holding the shape, and how often the opponent then reached our box (us / them tabs).
+**Space leaks**: per position, the dangerous space he leaves on the table now vs his first 15 minutes;
+Plan B uses it (a tired player who still holds his space is a lower priority; one who leaks is the first
+substitution). Then a fatigue map,
 a Copilot feed with a mini-pitch per event, and movement per player with a heatmap. On top:
 "Need to know", the three things that matter now, ranked from all modules (fatigue, counter-attacks,
 the channel the opponent uses, pressure, space denial dropping, the last Shadow Replay, line height, a dangerous opponent, a chance);

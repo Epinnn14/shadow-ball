@@ -83,16 +83,27 @@
   /* Plan B: ranked options. ctx fields (all optional):
        tired [{role, risk}], badDuel {def, att, behind}, oppLane 'left'|'middle'|'right' + oppShare,
        dangerA, regainNow, regainH1, drop {by, effect}, backFive {side, effect}, atkLane, atkFree,
-       subs {role -> recommend() result}
+       leak {role, label, ratio (gap now / early), risk}, subs {role -> recommend() result}
      effect = {metric, before, after} measured by the app. */
   function planB(ctx) {
     const out = [];
     const pct = (v) => Math.round(v * 100) + '%';
-    const t = (ctx.tired || [])[0];
+    // a role that leaks dangerous space AND is tiring: the strongest substitution case
+    const lk = ctx.leak;
+    if (lk && ctx.subs && ctx.subs[lk.role] && ctx.subs[lk.role][0]) {
+      const c = ctx.subs[lk.role][0];
+      out.push({ kind: 'sub', score: 84 + Math.min(10, lk.ratio * 2), title: `Bring on ${c.name} for ${lk.label || lk.role}`, role: lk.role, player: c.id,
+        why: `${lk.role} leaves ${lk.ratio.toFixed(1)}x the dangerous space he left early in the half` + (lk.risk != null ? `, fatigue risk ${lk.risk}` : '') +
+             `; ${c.name}: ${c.why.join(' · ') || 'fresh legs'} (match ${c.score})` });
+    }
+    const t = (ctx.tired || []).filter((x) => !lk || x.role !== lk.role)[0];
     if (t && ctx.subs && ctx.subs[t.role] && ctx.subs[t.role][0]) {
       const c = ctx.subs[t.role][0];
-      out.push({ kind: 'sub', score: 80 + t.risk / 5, title: `Bring on ${c.name} for ${t.label || t.role}`,
-        why: `${t.role} fatigue risk ${t.risk}; ${c.name}: ${c.why.join(' · ') || 'fresh legs'} (match ${c.score})`, role: t.role, player: c.id });
+      // the space check: a tired player who still holds his space is a lower priority
+      const holding = t.space != null && t.space < 1.0;
+      out.push({ kind: 'sub', score: 80 + t.risk / 5 - (holding ? 12 : 0), title: `Bring on ${c.name} for ${t.label || t.role}`,
+        why: `${t.role} fatigue risk ${t.risk}` + (holding ? ` but still holding his space (${t.space.toFixed(1)}x early)` : '') +
+             `; ${c.name}: ${c.why.join(' · ') || 'fresh legs'} (match ${c.score})`, role: t.role, player: c.id });
     }
     if (ctx.badDuel && ctx.subs && ctx.subs[ctx.badDuel.def] && ctx.subs[ctx.badDuel.def][0] && (!t || t.role !== ctx.badDuel.def)) {
       const c = ctx.subs[ctx.badDuel.def][0];

@@ -355,3 +355,51 @@ def test_shadow_block_rest_moment_replaces_denial():
     assert out["usual_rest"]["H"] == 900.0
     row = out["players"][[r[0] for r in out["teams"]].index(1475)][0]
     assert row[10:] == [30.0, 45.0, 58.0]                     # kept for its rest gap although gap < 5
+
+
+def test_pressing_seconds_and_zones():
+    """Two defenders near the ball = a press; regain and box outcomes look forward in time."""
+    import pandas as pd
+    from types import SimpleNamespace
+    from sb import pressing
+    a, b = paths.HALVES[0]
+    n_frames, n_slots = b + 300, 20
+    xy = np.full((n_frames, n_slots, 2), np.nan, dtype=np.float32)
+    teams = np.array([0] * 10 + [1] * 10)
+    for s in range(20):
+        xy[:, s] = (5 + 4 * s, 5 if s < 10 else 60)     # everybody far from the ball...
+    xy[:, 0], xy[:, 1] = (47, 34), (54, 34)             # ...except two H defenders within 8 m
+    t = a + 25
+    ball = np.full((n_frames, 2), np.nan, dtype=np.float32)
+    ball[t] = (50, 34)
+    lab = np.array(["D"] * n_frames, dtype="<U1")
+    lab[t:t + 50] = "A"
+    lab[t + 50:t + 100] = "H"                           # H wins it back after 2 s
+    valid = np.zeros((n_frames, n_slots), dtype=bool)
+    valid[:, :] = True
+    gk = np.zeros_like(valid)
+    sides = {(0, 1): True, (1, 1): False, (0, 2): True, (1, 2): False}
+    track = SimpleNamespace(xy=xy, teams=teams)
+    df = pressing.seconds(track, lab, ball, valid, gk, sides)
+    assert len(df) == 1
+    r = df.iloc[0]
+    assert r.defending == "H" and r.press and r.regain and not r.box and r.pressers == 2
+    z = pressing.zone_table(pd.concat([df, df.assign(press=False, regain=False)]))
+    row = z.iloc[0]
+    assert (row.n_press, row.n_hold, row.regain_press, row.regain_hold) == (1, 1, 1.0, 0.0)
+    assert pressing.band_of(10) == 0 and pressing.band_of(100) == 3 and pressing.lane_of(60) == 2
+
+
+def test_leak_blocks_against_first_15_minutes():
+    import pandas as pd
+    from sb import offball
+    a = paths.HALVES[1][0]
+    rows = []
+    for minute, gap in ((0, 2.0), (5, 2.0), (10, 2.0), (30, 8.0)):
+        for k in range(40):
+            rows.append({"frame": a + (minute * 60 + k) * 25, "half": 2, "team": "H", "label": "RB", "phase": "without ball",
+                         "contribution": 10.0 if minute < 30 else 5.0, "gap": gap})
+    stamina = pd.DataFrame({"team": ["H"], "label": ["RB"], "half": [2], "minute_from": [75], "risk": [60.0], "level": ["red"]})
+    b, rel = offball.leak_blocks(pd.DataFrame(rows), stamina)
+    last = b[b.block == 75].iloc[0]
+    assert (last.contribution, last.base_contribution, last.gap, last.base_gap, last.level) == (5.0, 10.0, 8.0, 2.0, "red")

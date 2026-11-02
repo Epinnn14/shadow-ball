@@ -3,28 +3,41 @@
 Possession detection for More Than A Hack 2027, Phase 1: one label per frame of the tactical
 video of FC Barcelona vs Athletic Club (H / A / D / X).
 
-## Reproduce
+## Reproduce the submitted file
+
+Python 3.10 to 3.14. Every package is pinned in `requirements.txt`, PyTorch included; its CPU
+build is enough, no GPU needed.
 
 ```bash
 pip install -r requirements.txt
-export MTAH_DATA_DIR=/path/to/data      # folder containing tactical/ and broadcast/
-python run.py cache
-python run.py v1                        # fallback: v1
+export MTAH_DATA_DIR=/path/to/data      # the match bundle, with the file names it arrives with
+                                        # (Windows PowerShell: $env:MTAH_DATA_DIR = "C:\path\to\data")
+python run.py cache                     # parse the tactical ATD once (~20 s)
+python run.py ball-predict              # unseen ball from the frozen weights models/ballnet.pt (CPU, deterministic, ~1.5 min)
+python run.py v4                        # v4.2 labels -> submissions/v4_restart.csv, validated, SHA-256 printed
 ```
 
-Training picks the GPU itself: CUDA (NVIDIA), MPS (Apple Silicon, used for the final models on a
-MacBook M5) or CPU; `SB_DEVICE=cpu|cuda|mps` forces one.
+Expected output of the last step:
 
-v2 additionally needs PyTorch (not in requirements.txt because the right build depends on your
-GPU: take the command from https://pytorch.org/get-started/locally/):
+```
+sha256 7e8743b8e1ffee44805edeb446debd73a2be00daae72da35f5ce1657157edff6
+{'H': 55040, 'A': 35356, 'D': 68461, 'X': 0, 'possessions': 279}
+```
+
+We got this exact file on Windows (CUDA build of PyTorch), on Linux (CPU) and from a fresh clone of
+this repository in a new environment. `python run.py validate submissions/v4_restart.csv` runs the
+organisers' checks again.
+
+**Do not run `ball-train` to reproduce.** It retrains ballnet and overwrites `models/ballnet.pt`; GPU
+training isn't bit-for-bit reproducible, so a retrained model gives a slightly different (equally
+valid) file. The weights in `models/ballnet.pt` (SHA-256 `511c9fab…3b4d69`, model parameters only, no
+match data) are the ones the submission was made with; the organisers confirmed they may be
+published here.
+
+Retraining, if you want it (~1 h on a laptop GPU; `SB_DEVICE=cpu|cuda|mps` forces the device):
 
 ```bash
-python run.py ball-train --cv           # ~100k-parameter model; GPU if available, else CPU (writes models/ballnet.pt)
-python run.py ball-predict             # reproduce: unseen ball from the frozen models/ballnet.pt, CPU, deterministic
-python run.py v2                        # v2 (fallback)
-python run.py v3                        # v3 (fallback)
-python run.py v4                        # current submission: v4
-python run.py validate submissions/v4_restart.csv
+python run.py ball-train --cv           # 40,000 steps, cross-validated by half, writes models/ballnet.pt
 ```
 
 The match data is not in this repository and must not be: it is licensed for the competition only.

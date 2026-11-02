@@ -105,7 +105,8 @@ Data is looked up in: `MTAH_DATA_DIR` -> `./data` -> `../Dataset Drive`.
   player positions); fills ~8% of the missing ball frames. Candidate for a v5 after Phase C.
 - `sb/export.py` — contract files in `exports/` (derived data, not committed).
 - `scripts/mask_test.py` — tests v1/v2/v3/v4 with the ball hidden ~41% in the public window.
-- PyTorch is installed separately (CUDA build from pytorch.org), needs Python <= 3.14.
+- PyTorch 2.14.1 is pinned in requirements.txt (the PyPI CPU build reproduces the submission; a CUDA build from
+  pytorch.org is only needed for fast training), needs Python <= 3.14.
   The submission model was trained on the RTX laptop (CUDA, 40k steps, 30 Oct); the M5 (MPS) works too.
   Retraining changes the CSV hash: adopt new weights only if the mask test improves, then re-check the hash on 2 machines.
   `SB_DEVICE=cpu|cuda|mps` forces the device.

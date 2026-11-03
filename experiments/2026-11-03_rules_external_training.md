@@ -59,6 +59,13 @@ Frozen weights `models/ballnet.pt` sha256 7e408f52dec493a4ddbdfb753981b95a96acc8
 c3eb7ed644caa73e94d5f03764c34c8bc6ba1f6e380dc097fe068a2c4b9ce502; H 53,141, A 36,899, D 68,817,
 X 40,462; 275 possessions, mean 13.1 s, D 43.3%.
 
+## Sanity check on the public window (not used to choose)
+
+`python run.py score`: spellF1 0.5576, macroF1 0.901 (16 possessions of mean 15.4 s against 17 of
+14.2 s; transition F1 0.46). `python scripts/mask_test.py` with the frozen external model, 8 maskings:
+v4 spellF1 0.483, macroF1 0.810 (v1 0.431 / 0.694). For reference only: the v4.2 figure (0.502 /
+0.838) came from a model trained on half 2 of this match and is not comparable.
+
 ## Decision
 
 Kept as the submission (v4.3) regardless of its public-window score, which is a sanity check only.

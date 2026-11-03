@@ -61,7 +61,7 @@ The match data is not in this repository and must not be: it is licensed for the
 | v4 | v3 + the ball is live from a seen restart kick on (a stoppage latch that ends on a kick pushes "alive" for 5 s), fixing dead-ball stretches that ended 1-5 s late | 0.5455 (macroF1 0.872); ball hidden: spellF1 0.464 vs v3 0.445, never worse in 8 masks |
 | v4.1 | v4 with better restarts: the ball reappearing already moving fast after an unseen stretch ends a stoppage; a 0.4 s placement is enough | 0.5455 (macroF1 0.900, transitions F1 0.46); ball hidden: spellF1 0.473 vs v4 0.464, never worse |
 | v4.2 (withdrawn: ballnet trained on the match) | v4.1 + dead ball before the second-half kick-off (detected from the players: both teams still in their own halves, then a burst), with ballnet retrained for 40,000 steps (early stopping peaked at 37,000-39,500; the old 20,000 cap stopped it early) | 0.5455 (macroF1 0.900, unchanged: the public window is in half 1); ball hidden: spellF1 0.502 vs 0.473, macroF1 0.838 vs 0.829 |
-| **v4.3** (submission) | v4.2 rules, with ballnet trained and early-stopped on external data only (Metrica Sports open sample games), after the organisers' rules clarification of 3 Nov 2026 | sanity check only, never used to choose |
+| **v4.3** (submission) | v4.2 rules, with ballnet trained and early-stopped on external data only (Metrica Sports open sample games), after the organisers' rules clarification of 3 Nov 2026 | 0.5576 (macroF1 0.901); ball hidden: spellF1 0.483, macroF1 0.810. Sanity check only, never used to choose |
 
 ## Tactical layer (Fase B)
 

@@ -4,10 +4,11 @@
     python run.py check                 # sanity checks on the data (counts, ball visibility)
     python run.py baseline --window 50  # v0: reproduce the organisers' baseline
     python run.py v1                    # v1: dead-ball detection + sticky possession (HMM)
-    python run.py ball-train --cv       # v2: train the ball model (GPU if available), validate
+    python run.py ball-train            # train the ball model on EXTERNAL data only (Metrica open sample games)
+    python run.py ball-predict          # rebuild the unseen ball from the frozen models/ballnet.pt (CPU)
     python run.py v2                    # v2: v1 + reconstructed ball
     python run.py v3                    # v3: v2 + fouls / whistles
-    python run.py v4                    # v4: v3 + live from the restart kick (current submission)
+    python run.py v4                    # v4.3: v3 + restarts + kick-off; ballnet trained on external data (submission)
     python run.py export                # contract files for the next phases -> exports/
     python run.py roles                 # Fase B: position labels + movement per position -> exports/
     python run.py tactics               # Fase B: transitions, shape, stamina, space -> exports/
@@ -79,53 +80,37 @@ def cmd_v1(args):
 
 
 def cmd_ball_train(args):
+    """Train ballnet on EXTERNAL data only (rules clarification, 3 Nov 2026): the open Metrica
+    Sports sample games 1 + 2 train it, game 3 early-stops it. The competition match is never
+    read here. Writes the frozen weights models/ballnet.pt and a report in experiments/."""
     import json
-    import os
-    from sb import ballnet
-    track = atd.Tracking()
-    halves = {1: ballnet.half_frames(track, 1), 2: ballnet.half_frames(track, 2)}
-    report = {"steps": args.steps, "batch": args.batch}
-    if args.train_half:
-        # one half only, early-stopped on the other: a model that has never seen the other half,
-        # for leak-free tests on it (e.g. scripts/mask_test.py on the public window, half 1)
-        val_h = 3 - args.train_half
-        model = ballnet.train(track, halves[args.train_half], steps=args.steps, batch=args.batch,
-                              val_frames=halves[val_h])
-        out = os.path.join(paths.CACHE_DIR, "ballnet_half{}.pt".format(args.train_half))
-        ballnet.save(model, out)
-        print("saved {} (best step {})".format(out, model.best_step))
-        return
-    final_steps = args.steps
-    if args.cv:
-        best_steps = []
-        for train_h, val_h in ((1, 2), (2, 1)):
-            print("cross-validation: train half {}, validate half {}".format(train_h, val_h))
-            model = ballnet.train(track, halves[train_h], steps=args.steps, batch=args.batch,
-                                  val_frames=halves[val_h])
-            res = ballnet.evaluate(model, track, halves[val_h])
-            res["best_step"] = model.best_step
-            best_steps.append(model.best_step)
-            report["cv_train{}_val{}".format(train_h, val_h)] = res
-            print(json.dumps(res, indent=1))
-        # early stopping chose these; the final model (no held-out half left) uses their mean
-        final_steps = int(np.mean(best_steps))
-    report["final_steps"] = final_steps
-    print("final model: train on both halves, {} steps".format(final_steps))
-    model = ballnet.train(track, np.concatenate([halves[1], halves[2]]),
-                          steps=final_steps, batch=args.batch)
-    ballnet.save(model)
-    # the frozen copy that the public repository ships (weights only, no match data) and that
-    # `python run.py ball-predict` uses, so the submission is regenerated without retraining
+    from sb import ballnet, external
+    games = {g: external.load_game(g) for g in (1, 2, 3)}
+    train_track = external.concat([games[1], games[2]])
+    val_track = external.concat([games[3]])
+    gaps = external.gap_lengths(train_track)
+    val_gaps = external.gap_lengths(val_track)
+    print("external data: train {} ({} seen-ball frames), validate {} ({})".format(
+        train_track.name, len(external.target_frames(train_track)),
+        val_track.name, len(external.target_frames(val_track))))
+    model = ballnet.train(train_track, external.target_frames(train_track), gaps,
+                          steps=args.steps, batch=args.batch, seed=args.seed,
+                          val_track=val_track, val_frames=external.target_frames(val_track),
+                          val_gaps=val_gaps)
+    report = {"data": "Metrica Sports sample data (github.com/metrica-sports/sample-data)",
+              "train": train_track.name, "validate": val_track.name,
+              "steps": args.steps, "batch": args.batch, "seed": args.seed,
+              "best_step": int(model.best_step),
+              "validation": ballnet.evaluate(model, val_track, external.target_frames(val_track), val_gaps)}
+    print(json.dumps(report, indent=1))
     os.makedirs(os.path.dirname(FROZEN_WEIGHTS), exist_ok=True)
     ballnet.save(model, FROZEN_WEIGHTS)
-    ball, sigma, source = ballnet.reconstruct(model, track)
-    out = os.path.join(paths.CACHE_DIR, "ball_reconstructed.npz")
-    np.savez(out, ball=ball, sigma=sigma, source=source)
-    log = os.path.join(paths.REPO, "experiments", "ballnet_{}.json".format(time.strftime("%Y%m%d_%H%M")))
+    log = os.path.join(paths.REPO, "experiments", "ballnet_external_{}.json".format(time.strftime("%Y%m%d_%H%M")))
     with open(log, "w") as handle:
         json.dump(report, handle, indent=1)
-    print("saved model to {}, reconstruction to {}, report to {}".format(
-        ballnet.model_path(), out, log))
+    print("saved frozen weights to {} (sha256 {}) and report to {}".format(
+        FROZEN_WEIGHTS, sha256(FROZEN_WEIGHTS), log))
+    print("next: python run.py ball-predict")
 
 
 FROZEN_WEIGHTS = os.path.join(paths.REPO, "models", "ballnet.pt")
@@ -150,7 +135,7 @@ def cmd_ball_predict(args):
     from sb import ballnet
     weights = args.weights or FROZEN_WEIGHTS
     if not os.path.isfile(weights):
-        sys.exit("No weights at {}. Train them with: python run.py ball-train --cv".format(weights))
+        sys.exit("No weights at {}. Train them with: python run.py ball-train".format(weights))
     track = atd.Tracking()
     model = ballnet.load(weights)
     model.eval()
@@ -167,7 +152,7 @@ def cmd_v2(args, module=v2, name="v2_ballnet"):
     import os
     path = os.path.join(paths.CACHE_DIR, "ball_reconstructed.npz")
     if not os.path.isfile(path):
-        sys.exit("No reconstructed ball yet. Run: python run.py ball-train --cv")
+        sys.exit("No reconstructed ball yet. Run: python run.py ball-predict")
     z = np.load(path)
     track = atd.Tracking()
     labels = module.run(track, z["ball"], z["sigma"])
@@ -468,11 +453,9 @@ def main():
     p.set_defaults(func=cmd_baseline)
     sub.add_parser("v1").set_defaults(func=cmd_v1)
     p = sub.add_parser("ball-train")
-    p.add_argument("--steps", type=int, default=40000)  # early stopping peaked at 37-39.5k (2026-10-30)
+    p.add_argument("--steps", type=int, default=60000)  # cap; early stopping on external game 3 picks the step
     p.add_argument("--batch", type=int, default=512)
-    p.add_argument("--cv", action="store_true", help="also train/validate across halves (3x time)")
-    p.add_argument("--train-half", type=int, choices=(1, 2),
-                   help="train on one half only -> cache/ballnet_half<N>.pt (for leak-free tests)")
+    p.add_argument("--seed", type=int, default=0)
     p.set_defaults(func=cmd_ball_train)
     p = sub.add_parser("ball-predict", help="rebuild the unseen ball from the frozen weights (CPU, reproducible)")
     p.add_argument("--weights", help="default: models/ballnet.pt")

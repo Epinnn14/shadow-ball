@@ -8,7 +8,7 @@ import numpy as np, pandas as pd
 import possession_metrics as pm
 from sb import atd, ballnet, paths, features as F, v4
 import mask_test as M
-track = atd.Tracking(); model = ballnet.load(os.path.join(paths.CACHE_DIR, "ballnet_half2.pt"))
+track = atd.Tracking(); model = ballnet.load(os.path.join(paths.REPO, "models", "ballnet.pt"))
 gaps = ballnet.real_gap_lengths(track); gt = pm.label_codes(pd.read_csv(paths.PUBLIC_GT))
 orig_out, orig_wh = F.out_until_restart, F.whistle_until_restart
 old_out = functools.partial(orig_out, placed_frames=20, unseen_restart=False)

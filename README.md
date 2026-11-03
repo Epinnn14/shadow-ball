@@ -14,31 +14,39 @@ export MTAH_DATA_DIR=/path/to/data      # the match bundle, with the file names 
                                         # (Windows PowerShell: $env:MTAH_DATA_DIR = "C:\path\to\data")
 python run.py cache                     # parse the tactical ATD once (~20 s)
 python run.py ball-predict              # unseen ball from the frozen weights models/ballnet.pt (CPU, deterministic, ~1.5 min)
-python run.py v4                        # v4.2 labels -> submissions/v4_restart.csv, validated, SHA-256 printed
+python run.py v4                        # v4.3 labels -> submissions/v4_restart.csv, validated, SHA-256 printed
 ```
 
 Expected output of the last step:
 
 ```
-sha256 7e8743b8e1ffee44805edeb446debd73a2be00daae72da35f5ce1657157edff6
-{'H': 55040, 'A': 35356, 'D': 68461, 'X': 0, 'possessions': 279}
+sha256 c3eb7ed644caa73e94d5f03764c34c8bc6ba1f6e380dc097fe068a2c4b9ce502
+{'H': 53141, 'A': 36899, 'D': 68817, 'X': 0, 'possessions': 275}
 ```
 
-We got this exact file on Windows (CUDA build of PyTorch), on Linux (CPU) and from a fresh clone of
-this repository in a new environment. `python run.py validate submissions/v4_restart.csv` runs the
-organisers' checks again.
+`python run.py validate submissions/v4_restart.csv` runs the organisers' checks again.
 
 **Do not run `ball-train` to reproduce.** It retrains ballnet and overwrites `models/ballnet.pt`; GPU
 training isn't bit-for-bit reproducible, so a retrained model gives a slightly different (equally
-valid) file. The weights in `models/ballnet.pt` (SHA-256 `511c9fab…3b4d69`, model parameters only, no
-match data) are the ones the submission was made with; the organisers confirmed they may be
-published here.
+valid) file. The weights in `models/ballnet.pt` (SHA-256 `7e408f52…6b4e87`, model parameters
+only) are the ones the submission was made with.
 
-Retraining, if you want it (~1 h on a laptop GPU; `SB_DEVICE=cpu|cuda|mps` forces the device):
+### How the ball model is trained: external data only
+
+Following the organisers' rules clarification (3 Nov 2026), ballnet is trained and early-stopped on
+**external data only**: the open [Metrica Sports sample data](https://github.com/metrica-sports/sample-data)
+(three games; games 1 and 2 train it, game 3 picks the stopping step). It never sees the competition
+match, which is only an input when the frozen model fills the missing ball. Nothing in the pipeline
+is trained or tuned on the competition match, its ground truth or its video.
 
 ```bash
-python run.py ball-train --cv           # 40,000 steps, cross-validated by half, writes models/ballnet.pt
+git clone https://github.com/metrica-sports/sample-data external/metrica-sample-data   # not committed
+python run.py ball-train                # up to 60,000 steps, early-stopped on game 3 (best: step 50,500), writes models/ballnet.pt
 ```
+
+About 30 minutes on a laptop GPU (`SB_DEVICE=cpu|cuda|mps` forces the device); `MTAH_EXTERNAL_DIR`
+points elsewhere if the sample data lives in another folder. Data source: Metrica Sports, sample
+data, https://github.com/metrica-sports/sample-data.
 
 The match data is not in this repository and must not be: it is licensed for the competition only.
 
@@ -52,7 +60,8 @@ The match data is not in this repository and must not be: it is licensed for the
 | v3 | v2 + fouls and other stoppages with the ball still on the pitch: inferred whistle (collective deceleration that stays slow) latched until the restart, 10 s activity, ball placed inside the pitch | 0.5091 (macroF1 0.855 vs 0.760); ball hidden: spellF1 0.445 vs v2 0.444, macroF1 0.797 vs 0.731 |
 | v4 | v3 + the ball is live from a seen restart kick on (a stoppage latch that ends on a kick pushes "alive" for 5 s), fixing dead-ball stretches that ended 1-5 s late | 0.5455 (macroF1 0.872); ball hidden: spellF1 0.464 vs v3 0.445, never worse in 8 masks |
 | v4.1 | v4 with better restarts: the ball reappearing already moving fast after an unseen stretch ends a stoppage; a 0.4 s placement is enough | 0.5455 (macroF1 0.900, transitions F1 0.46); ball hidden: spellF1 0.473 vs v4 0.464, never worse |
-| **v4.2** (submission) | v4.1 + dead ball before the second-half kick-off (detected from the players: both teams still in their own halves, then a burst), with ballnet retrained for 40,000 steps (early stopping peaked at 37,000-39,500; the old 20,000 cap stopped it early) | 0.5455 (macroF1 0.900, unchanged: the public window is in half 1); ball hidden: spellF1 0.502 vs 0.473, macroF1 0.838 vs 0.829 |
+| v4.2 (withdrawn: ballnet trained on the match) | v4.1 + dead ball before the second-half kick-off (detected from the players: both teams still in their own halves, then a burst), with ballnet retrained for 40,000 steps (early stopping peaked at 37,000-39,500; the old 20,000 cap stopped it early) | 0.5455 (macroF1 0.900, unchanged: the public window is in half 1); ball hidden: spellF1 0.502 vs 0.473, macroF1 0.838 vs 0.829 |
+| **v4.3** (submission) | v4.2 rules, with ballnet trained and early-stopped on external data only (Metrica Sports open sample games), after the organisers' rules clarification of 3 Nov 2026 | sanity check only, never used to choose |
 
 ## Tactical layer (Fase B)
 

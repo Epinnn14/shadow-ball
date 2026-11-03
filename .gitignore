@@ -16,3 +16,6 @@ venv/
 .vscode/
 .idea/
 .DS_Store
+
+# External training data (Metrica open sample data), never committed
+external/

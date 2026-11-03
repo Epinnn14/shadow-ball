@@ -434,3 +434,54 @@ def test_kickoff_frame_after_standstill_in_own_halves():
     assert abs(k - kick) <= fps // 2
     # wrong sides: nobody is in his own half, so no kick-off is found
     assert features.kickoff_frame(track, 0, {0: False, 1: True}) is None
+
+
+def _write_fake_metrica_game(root, game, n=60):
+    game_dir = root / "data" / "Sample_Game_{}".format(game)
+    game_dir.mkdir(parents=True)
+    for side, n_players, x0 in (("Home", 3, 0.2), ("Away", 2, 0.7)):
+        head = [",,," + ",".join([side, ""] * n_players) + ",,",
+                ",,," + ",".join(x for k in range(n_players) for x in (str(k), "")) + ",,",
+                "Period,Frame,Time [s]," + ",".join(x for k in range(n_players) for x in ("Player{}".format(k), "")) + ",Ball,"]
+        rows = []
+        for f in range(1, n + 1):
+            players = ",".join("{:.3f},{:.3f}".format(x0 + 0.01 * k, 0.5) for k in range(n_players))
+            ball = "0.5,0.5" if f % 10 else "NaN,NaN"
+            rows.append("1,{},{:.2f},{},{}".format(f, f / 25, players, ball))
+        (game_dir / "Sample_Game_{}_RawTrackingData_{}_Team.csv".format(game, side)).write_text(
+            "\n".join(head + rows) + "\n")
+
+
+def test_external_metrica_loader_and_concat(tmp_path):
+    from sb import external
+    _write_fake_metrica_game(tmp_path, 1)
+    _write_fake_metrica_game(tmp_path, 2)
+    g1 = external.load_game(1, root=str(tmp_path))
+    assert g1.xy.shape == (60, 5, 2)
+    assert list(g1.teams) == [0, 0, 0, 1, 1]
+    assert abs(g1.xy[0, 0, 0] - 0.2 * paths.PITCH[0]) < 1e-3          # 0-1 scaled to metres
+    assert g1.ball_seen.sum() == 54                                      # every 10th frame unseen
+    both = external.concat([g1, external.load_game(2, root=str(tmp_path))])
+    sep = external.SEPARATOR_S * paths.FPS
+    assert len(both) == 60 + sep + 60
+    assert list(both.teams) == [0, 0, 0, 1, 1]
+    assert (both.period[60:60 + sep] == 0).all()
+    targets = external.target_frames(both)
+    assert len(targets) == 108 and not np.isin(np.arange(60, 60 + sep), targets).any()
+    gaps = external.gap_lengths(both)
+    assert (gaps[:-49] == 1).all()                                       # the 1-frame holes; separator excluded
+
+
+def test_ballnet_features_need_only_positions():
+    from sb import ballnet
+
+    class T:
+        pass
+    t = T()
+    t.xy = np.zeros((20, 2, 2), dtype=np.float32)
+    t.xy[:, 0, 0] = np.arange(20) * 0.2                                  # 5 m/s along x
+    t.xy[:, 1] = np.nan
+    t.teams = np.array([0, 1])
+    feats = ballnet.player_tensor(t)
+    assert abs(feats[10, 0, 4] - 0.5) < 1e-5                             # speed 5 m/s / 10
+    assert np.isnan(feats[10, 1]).all()

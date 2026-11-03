@@ -1,11 +1,13 @@
 """v2 building block: reconstruct the ball when the tracker loses it, from the 22 players.
 
-Self-supervised: every frame where the ball IS seen is a free training example. We pretend the
+Self-supervised: every frame where the ball IS seen is a free training example. Since the rules
+clarification of 3 Nov 2026 it trains and early-stops on EXTERNAL data only (the open Metrica
+Sports sample games, sb/external.py); the competition match is only ever an input to prediction. We pretend the
 ball is missing around it (a synthetic gap drawn from the real gap lengths), give the model only
 what it would have in a real gap -- the players, and where the ball was last/next seen and how
 long ago -- and ask for the true position. The model also predicts its own uncertainty.
 
-    python run.py ball-train            # trains on both halves, reports cross-half validation
+    python run.py ball-train            # trains on external games 1+2, early-stops on game 3
     python run.py ball-predict          # fills every unseen frame -> cache/ball_reconstructed.npz
 
 Model: a small transformer over the player set (order-free, so track-slot swaps do not matter)
@@ -39,10 +41,11 @@ def player_tensor(track):
     vel = (nxt - prev) / (2 * VEL_HALF / paths.FPS)              # m/s
     vel = np.where(np.isnan(vel), 0.0, vel)
     team = np.broadcast_to(np.where(track.teams == 0, 1.0, -1.0), xy.shape[:2])
-    feats = np.stack([
+    speed = np.hypot(vel[..., 0], vel[..., 1])                    # from positions only, so the
+    feats = np.stack([                                             # same features exist in any source
         xy[..., 0] / length, xy[..., 1] / width,
         vel[..., 0] / 10.0, vel[..., 1] / 10.0,
-        track.speed / 10.0, team,
+        speed / 10.0, team,
     ], axis=-1).astype(np.float32)
     feats[np.isnan(xy[..., 0])] = np.nan
     return feats
@@ -130,7 +133,8 @@ def augment_batch(rng, players, ctx, target):
 
 
 def real_gap_lengths(track):
-    """Lengths (frames) of the real unseen-ball gaps in graded play: the training distribution."""
+    """Lengths (frames) of the real unseen-ball gaps in graded play of the competition match.
+    Diagnostics only: training draws its gaps from the external data (sb/external.gap_lengths)."""
     seen = track.ball_seen
     graded = paths.graded_mask()
     runs, count = [], 0
@@ -232,19 +236,20 @@ def nll_metres(mean, logvar, target):
     return (0.5 * err2 * torch.exp(-logvar) + logvar).mean()
 
 
-def train(track, train_frames, steps=4000, batch=512, lr=2e-3, seed=0, log_every=500,
-          val_frames=None, eval_every=500):
-    """Train with augmentation. With `val_frames`, keep the weights from the step with the lowest
-    validation error (early stopping) and record it as model.best_step."""
+def train(track, train_frames, gaps, steps=4000, batch=512, lr=2e-3, seed=0, log_every=500,
+          val_track=None, val_frames=None, val_gaps=None, eval_every=500):
+    """Train with augmentation on `track` (external data only, see sb/external.py). With
+    `val_track` + `val_frames`, keep the weights from the step with the lowest validation error
+    (early stopping) and record it as model.best_step."""
     import copy
     import torch
     torch.manual_seed(seed)
     device = _device()
-    gaps = real_gap_lengths(track)
     sampler = Sampler(track, train_frames, gaps, seed=seed)
     val = None
-    if val_frames is not None:
-        val = _to(device, *Sampler(track, val_frames, gaps, seed=999).batch(4096))
+    if val_track is not None:
+        val_gaps = gaps if val_gaps is None else val_gaps
+        val = _to(device, *Sampler(val_track, val_frames, val_gaps, seed=999).batch(4096))
     model = build_model().to(device)
     opt = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-2)
     sched = torch.optim.lr_scheduler.OneCycleLR(opt, max_lr=lr, total_steps=steps)
@@ -299,9 +304,9 @@ def predict(model, players, ctx, batch=4096):
     return mean, np.concatenate(sigmas)
 
 
-def evaluate(model, track, frames, n=20000, seed=123):
+def evaluate(model, track, frames, gaps, n=20000, seed=123):
     """Median error (m) on synthetic gaps at held-out frames, against two simple baselines."""
-    sampler = Sampler(track, frames, real_gap_lengths(track), seed=seed)
+    sampler = Sampler(track, frames, gaps, seed=seed)
     players, ctx, target = sampler.batch(n)
     scale = np.array(paths.PITCH, dtype=np.float32)
     mean, sigma = predict(model, players, ctx)

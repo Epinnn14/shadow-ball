@@ -12,11 +12,11 @@ python run.py cache                 # parse ATD once -> cache/tactical_atd.npz (
 python run.py check                 # check data
 python run.py baseline --window 50  # v0, must match the organizers' baseline 100%
 python run.py v1                    # v1, fallback
-python run.py ball-train --cv       # v2: train the ball reconstruction model (GPU), cross-validation by half, 40k steps (~1 h RTX)
+python run.py ball-train            # train ballnet on EXTERNAL data only (Metrica open sample games 1+2, early stop on 3)
 python run.py v2                    # v2: v1 + reconstructed ball (fallback)
 python run.py v3                    # v3: v2 + fouls/whistle (fallback)
 python run.py ball-predict          # unseen ball from the FROZEN weights models/ballnet.pt (CPU, deterministic, no training)
-python run.py v4                    # v4.2: v3 + restart kick + dead before the kick-off -- CURRENT SUBMISSION (prints SHA-256)
+python run.py v4                    # v4.3: v4.2 rules + ballnet trained on external data -- CURRENT SUBMISSION (prints SHA-256)
 python run.py export                # exports/possession.csv + exports/ball.parquet (DO NOT commit)
 python run.py roles                 # Phase B: position labels + movement -> exports/roles.parquet, movement.parquet
 python run.py tactics               # Phase B: transitions/counter-press, space map, shape, stamina -> exports/
@@ -24,7 +24,7 @@ python run.py offball               # CORE: off-ball movement, space denial, sha
 python run.py demo                  # replay clip for the web demo -> exports/demo/clip.json (DO NOT upload)
 python run.py serve                 # demo on the laptop (full) + phone on the same Wi-Fi/hotspot (pitch + movement)
 python scripts/restart_ab.py        # A/B of the old vs new restart rule (ball hidden)
-python run.py ball-train --train-half 2 && python scripts/mask_test.py   # leak-free v1 vs v2 test
+python scripts/mask_test.py         # sanity check only (public GT): never used to pick a version
 python run.py score                 # score every CSV in submissions/ (public 5-minute GT)
 python run.py validate FILE         # organizers' official validator
 python -m pytest -q                 # quick tests, no data needed
@@ -42,9 +42,10 @@ Data is looked up in: `MTAH_DATA_DIR` -> `./data` -> `../Dataset Drive`.
 - `sb/tagging.py` — Smart Tagging to video frames.
 - `sb/hmm.py` — 3-state HMM (H/A/D) + Viterbi.
 - `sb/v1.py` — v1: all parameters in `PARAMS`, each with its physical justification.
-- `models/ballnet.pt` — frozen ballnet weights (40k-step model, sha256 511c9fab…, 30 Oct) COMMITTED to the public repo (weights only, no data): the submission is
-  regenerated with `ball-predict` + `v4` without retraining (GPU training is not bit-reproducible; checked: identical
-  reconstruction and identical CSV hash from the same weights). `ball-train` (final model) rewrites it.
+- `models/ballnet.pt` — frozen ballnet weights (sha256 7e408f52…, step 50,500, 3 Nov), trained on EXTERNAL data only (v4.3), COMMITTED (organisers
+  allowed it, 2 Nov): the submission is regenerated with `ball-predict` + `v4` without retraining.
+- `sb/external.py` — loader for the open Metrica Sports sample data (`external/metrica-sample-data`, git-ignored),
+  same attributes as `Tracking`; `concat` puts home players in the first slots and away in the rest.
 - `sb/ballnet.py` — ball reconstruction model (small transformer over the player set, self-supervised
   with synthetic gaps drawn from the real gap distribution; outputs position + uncertainty).
 - `sb/v2.py` — v1 + reconstructed ball for team-control evidence (dead ball still uses the real ball).
@@ -132,6 +133,13 @@ Data is looked up in: `MTAH_DATA_DIR` -> `./data` -> `../Dataset Drive`.
 - X in scored frames: the spellF1 scorer fills it with the previous label in the same half.
 
 ## Working rules
+
+- RULES CLARIFICATION (organisers, 3 Nov 2026, overrides everything earlier): no checking output against the
+  video; no hand labels on this game; NO UPLOADING THE PROVIDED DATA TO AI SERVICES (an AI assistant must not
+  read or run the match data: the team runs everything with data locally); no training/fitting/calibration on
+  the ground truth or the video; any training or tuning uses EXTERNAL data only. Allowed: automatic checks
+  with the provided data, looking at data/video to understand possession, intermediate files, datasets we
+  have the rights to use.
 
 - Labels MUST be produced by the algorithm. No manual corrections to the submission.
 - The public 5-minute GT is only for checking pipeline correctness, NOT for choosing parameters

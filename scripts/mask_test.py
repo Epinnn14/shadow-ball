@@ -5,10 +5,11 @@ So we hide it on purpose, with gaps drawn from the real gap lengths until ~41% o
 missing (the full-match rate), then score v1 and v2 against the public ground truth. Several
 random maskings, paired comparison: same mask for both versions.
 
-This uses the public ground truth to MEASURE, not to tune: no parameter is chosen from it.
+This uses the public ground truth to MEASURE, not to tune: no parameter is chosen from it. Under
+the rules clarification of 3 Nov 2026 it is a sanity check only; it never picks a version.
+The ball model is trained on external data only, so it has never seen this match at all.
 
-    python run.py ball-train --train-half 2      # model that never saw half 1 (public window)
-    python scripts/mask_test.py --runs 8 --model cache/ballnet_half2.pt
+    python scripts/mask_test.py --runs 8          # uses the frozen models/ballnet.pt
 """
 
 import argparse
@@ -53,12 +54,9 @@ def score(labels, gt_codes):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--runs", type=int, default=8)
-    parser.add_argument("--model", default=os.path.join(paths.CACHE_DIR, "ballnet_half2.pt"),
-                        help="use a model trained on half 2 only; the full model has seen the "
-                             "public window and makes this test optimistic")
+    parser.add_argument("--model", default=os.path.join(paths.REPO, "models", "ballnet.pt"),
+                        help="frozen weights trained on external data only")
     args = parser.parse_args()
-    if os.path.basename(args.model) == "ballnet.pt":
-        print("WARNING: the full model was trained on the public window too: results are optimistic")
     track = atd.Tracking()
     model = ballnet.load(args.model)
     gaps = ballnet.real_gap_lengths(track)

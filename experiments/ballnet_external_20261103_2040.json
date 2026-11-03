@@ -1,0 +1,40 @@
+{
+ "data": "Metrica Sports sample data (github.com/metrica-sports/sample-data)",
+ "train": "game1+game2",
+ "validate": "game3",
+ "steps": 60000,
+ "batch": 512,
+ "seed": 0,
+ "best_step": 50500,
+ "validation": {
+  "model_median_m": 1.2228409051895142,
+  "interp_median_m": 1.4734938144683838,
+  "last_seen_median_m": 4.411779403686523,
+  "model_median_m_no_context": 6.377781867980957,
+  "interp_median_m_no_context": 28.067556381225586,
+  "share_no_context": 0.01525,
+  "within_1sigma": 0.6661,
+  "team_agreement_model": 0.7924906651915364,
+  "team_agreement_interp": 0.7814271884939842,
+  "gap_0-2s": {
+   "share": 0.526,
+   "model_m": 0.04,
+   "interp_m": 0.0
+  },
+  "gap_2-10s": {
+   "share": 0.213,
+   "model_m": 4.33,
+   "interp_m": 6.36
+  },
+  "gap_10-30s": {
+   "share": 0.182,
+   "model_m": 5.46,
+   "interp_m": 15.54
+  },
+  "gap_30-infs": {
+   "share": 0.079,
+   "model_m": 6.13,
+   "interp_m": 27.05
+  }
+ }
+}

@@ -259,7 +259,7 @@ def run(track, possession):
 
 
 def save(df, formations):
-    out = os.path.join(paths.REPO, "exports")
+    out = paths.EXPORTS_DIR
     os.makedirs(out, exist_ok=True)
     df.to_parquet(os.path.join(out, "roles.parquet"), index=False)
     with open(os.path.join(out, "formations.json"), "w") as handle:

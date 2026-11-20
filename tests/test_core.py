@@ -485,3 +485,121 @@ def test_ballnet_features_need_only_positions():
     feats = ballnet.player_tensor(t)
     assert abs(feats[10, 0, 4] - 0.5) < 1e-5                             # speed 5 m/s / 10
     assert np.isnan(feats[10, 1]).all()
+
+
+def test_reference_labels_from_events():
+    import pandas as pd
+    from sb import reference
+    ev = pd.DataFrame([
+        # kick-off by H at 10, H passes, A recovers at 40, ball out at 60, A throw-in at 80, foul at 100,
+        # H free kick at 120, last event ends at 130
+        dict(side="H", type="SET PIECE", subtype="KICK OFF", start=10, end=10),
+        dict(side="H", type="PASS", subtype="", start=20, end=25),
+        dict(side="H", type="BALL LOST", subtype="", start=30, end=30),
+        dict(side="A", type="RECOVERY", subtype="", start=40, end=40),
+        dict(side="A", type="BALL OUT", subtype="", start=55, end=60),
+        dict(side="A", type="SET PIECE", subtype="THROW IN", start=80, end=80),
+        dict(side="H", type="FAULT RECEIVED", subtype="", start=100, end=100),
+        dict(side="H", type="SET PIECE", subtype="FREE KICK", start=120, end=120),
+        dict(side="H", type="PASS", subtype="", start=125, end=130),
+    ])
+    lab = reference.labels(ev, 200, ((0, 199),))
+    assert set(lab[:10]) == {"D"}                    # before the kick-off
+    assert set(lab[10:40]) == {"H"}                  # ball lost at 30 does not hand it over
+    assert set(lab[40:60]) == {"A"}                  # recovery switches; owner until the ball is out
+    assert set(lab[60:80]) == {"D"}                  # dead until the throw-in
+    assert set(lab[80:100]) == {"A"}
+    assert set(lab[100:120]) == {"D"}                # foul until the free kick
+    assert set(lab[120:156]) == {"H"}                # 1 s of play after the last event
+    assert set(lab[156:]) == {"X"}
+
+
+def test_game_catalog_open_games_have_own_folders():
+    import subprocess
+    code = ("import os,sys;sys.path.insert(0,'.');os.environ['SB_GAME']='METRICA-2';"
+            "from sb import paths;print(paths.N_FRAMES, paths.PITCH, paths.OPEN_DATA, os.path.basename(paths.CACHE_DIR))")
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True,
+                         cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__)))).stdout.split()
+    assert out == ["141156", "(105.0,", "68.0)", "True", "metrica-2"]
+    assert paths.GAME == "BAR-ATH" and paths.N_FRAMES == 199319 and not paths.OPEN_DATA
+
+
+def test_phase2_neighbours_of_a_back_four_and_midfield():
+    from sb import phase2
+    rm = {"GK": [-40, 34], "LB": [-15, 8], "LCB": [-17, 26], "RCB": [-17, 42], "RB": [-15, 60],
+          "LCM": [0, 24], "RCM": [0, 44], "ST": [15, 34]}
+    pairs = phase2.neighbours(rm)
+    assert ("LB", "LCB") in pairs and ("LCB", "RCB") in pairs and ("RB", "RCB") in pairs
+    assert ("LB", "RB") not in pairs                     # not adjacent in the line
+    assert all("GK" not in p for p in pairs)
+    assert ("LCM", "ST") in pairs or ("RCM", "ST") in pairs   # each line links to the next
+
+
+def test_phase2_passing_network_counts_and_frames():
+    import pandas as pd
+    from sb import phase2
+    L, W = phase2.L, phase2.W
+    rows = []
+    for i in range(3):                                  # H: 3 passes 7 -> 9, forward 20 m, attacking right
+        rows.append(dict(side="H", type="PASS", subtype="", period=1, start=100 * i, end=100 * i + 10,
+                         **{"from": "Player7", "to": "Player9"}, x0=40.0, y0=30.0, x1=60.0, y1=30.0))
+    rows.append(dict(side="H", type="BALL LOST", subtype="", period=1, start=400, end=410,
+                     **{"from": "Player9", "to": None}, x0=60.0, y0=30.0, x1=np.nan, y1=np.nan))
+    # A attacks left in half 1: a pass from x=80 to x=60 is forward 20 m in its own frame
+    rows.append(dict(side="A", type="PASS", subtype="", period=1, start=500, end=510,
+                     **{"from": "Player4", "to": "Player8"}, x0=80.0, y0=10.0, x1=60.0, y1=10.0))
+    rows.append(dict(side="A", type="SHOT", subtype="ON TARGET", period=1, start=560, end=570,
+                     **{"from": "Player8", "to": None}, x0=60.0, y0=10.0, x1=np.nan, y1=np.nan))
+    ev = pd.DataFrame(rows)
+    sides = {(0, 1): True, (1, 1): False}
+    out = phase2.passing_network(ev, sides, upto=10_000, half=1)
+    h, a = out["H"], out["A"]
+    assert h["passes"] == 3 and h["lost"] == 1 and h["success"] == 0.75
+    assert h["types"]["forward"] == 3 and h["links"] == [[7, 9, 3]]
+    assert a["types"]["forward"] == 1 and a["types"]["key"] == 1
+    assert a["nodes"][0][1] == round(L - 80.0, 1) and a["nodes"][0][2] == round(W - 10.0, 1)    # mirrored into its attacking frame
+    assert a["links"] == []                              # one pass is below the 2-pass link threshold
+    assert phase2.passing_network(None, sides, 10_000) is None
+
+
+def test_video_homography_from_landmarks_round_trip():
+    pytest = __import__("pytest")
+    cv2 = pytest.importorskip("cv2")
+    from sb import video
+    lm = video.landmarks()
+    H_true = np.array([[8.0, 1.5, 100.0], [0.3, 6.0, 80.0], [0.0005, 0.004, 1.0]])     # pitch -> image
+    names = ["corner top-left", "halfway top", "centre spot", "left penalty spot", "left box bottom corner"]
+    px = video.to_pitch(H_true, [lm[n] for n in names])        # same maths: apply H to points
+    calib = {"points": [{"name": n, "px": list(p)} for n, p in zip(names, px)]}
+    H = video.homography_from_calib(calib, (105.0, 68.0))
+    back = video.to_pitch(H, px)
+    assert np.allclose(back, [lm[n] for n in names], atol=1e-4)
+
+
+def test_video_slots_share_only_when_tracks_never_overlap():
+    from sb import video
+    tracks = {1: (0, 100, 101), 2: (101, 200, 100), 3: (50, 150, 101), 4: (160, 170, 11)}
+    s = video.slots_for(tracks)
+    assert s[1] == s[2]                     # one after the other: same slot
+    assert s[3] != s[1]                     # overlaps both
+    assert len(set(s.values())) == 2        # 4 fits in after 3 ends
+
+
+def test_video_ball_is_never_a_painted_mark_or_a_jump():
+    from sb import video
+    assert video.line_distance((52.5, 10.0)) < 0.01 and video.line_distance((30.0, 30.0)) > 5
+    cands = np.array([[11.0, 34.0], [40.0, 20.0], [70.0, 50.0]])
+    p, _ = video.pick_ball(cands, [(0, 0), (1, 1), (2, 2)], np.array([41.0, 21.0]), 1, (105.0, 68.0), np.zeros((0, 2)))
+    assert tuple(p) == (40.0, 20.0)         # penalty spot rejected, the far blob is too far a jump
+    p, _ = video.pick_ball(cands[:1], [(0, 0)], None, 99, (105.0, 68.0), np.zeros((0, 2)))
+    assert np.isnan(p[0])
+
+
+def test_video_tracker_keeps_ids_through_a_short_gap():
+    from sb import video
+    t = video.PitchTracker()
+    a = t.step(0, np.array([[10.0, 10.0], [50.0, 30.0]]))
+    b = t.step(1, np.array([[50.3, 30.1], [10.2, 10.0]]))
+    c = t.step(5, np.array([[11.0, 10.0]]))         # second player unseen for 4 frames
+    d = t.step(6, np.array([[11.2, 10.0], [51.0, 30.4]]))
+    assert b == [a[1], a[0]] and c == [a[0]] and d == [a[0], a[1]]

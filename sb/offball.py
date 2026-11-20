@@ -275,7 +275,7 @@ def summarize(players, teams, lab, ball, sides, transitions=None):
     t["defending"] = np.where(t.possession == "H", "A", "H")
     t["denied"] = np.where(t.possession == "H", t.J_A, t.J_H)            # share of THEIR danger we own
     half_of = paths.half_of_frames()
-    t["minute"] = [(f - paths.HALVES[h - 1][0]) / FPS / 60 + (0 if h == 1 else 45) for f, h in zip(t.frame, t.half)]
+    t["minute"] = [(f - paths.HALVES[h - 1][0]) / FPS / 60 + (0 if h == 1 else paths.H2) for f, h in zip(t.frame, t.half)]
     bx = []
     for f, team in zip(t.frame, t.possession):
         right = sides[(0 if team == "H" else 1, int(half_of[f]))]
@@ -378,7 +378,7 @@ def leak_blocks(players, stamina=None, min_samples=30):
     Returns (blocks, fatigue_vs_denial) -- the second says whether running data alone tells who leaks."""
     q = players[players.phase == "without ball"]
     starts = {h: paths.HALVES[h - 1][0] for h in (1, 2)}
-    minute = (q.frame - q.half.map(starts)) / FPS / 60 + np.where(q.half == 1, 0, 45)
+    minute = (q.frame - q.half.map(starts)) / FPS / 60 + np.where(q.half == 1, 0, paths.H2)
     q = q.assign(block=(minute // 5 * 5).astype(int))
     b = q.groupby(["team", "label", "half", "block"]).agg(samples=("gap", "size"), contribution=("contribution", "mean"),
                                                           gap=("gap", "mean")).reset_index()
@@ -408,7 +408,7 @@ def leak_blocks(players, stamina=None, min_samples=30):
 
 
 def save(players, teams, by_role, by_team, info, validity, trend=None, recovery=None, rest=None, leak=None, leak_rel=None):
-    out = os.path.join(paths.REPO, "exports")
+    out = paths.EXPORTS_DIR
     os.makedirs(out, exist_ok=True)
     players.to_parquet(os.path.join(out, "offball.parquet"), index=False)
     teams.to_parquet(os.path.join(out, "offball_team.parquet"), index=False)

@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Shadow Ball: a free coaching assistant that reads player tracking and shows who controls the dangerous space.">
+<title>Shadow Ball</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Work+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="style.css?v=20261122a">
+<link rel="stylesheet" href="home.css?v=20261122a">
+<script src="theme.js?v=20261122a"></script>
+<script src="i18n-id.js?v=20261122a"></script>
+<script src="i18n.js?v=20261122a"></script>
+</head>
+<body class="home">
+<header class="bar site-bar">
+  <a class="brand" href="./" aria-label="Shadow Ball home"><span class="mark" aria-hidden="true"></span><span class="word" data-no-i18n>Shadow<b>Ball</b></span></a>
+  <nav class="site-nav" aria-label="Main">
+    <a href="playground.html">Tactics board</a>
+    <a href="replay.html">Match replay</a>
+    <a href="#own">Your own match</a>
+  </nav>
+  <div class="bar-tools">
+    <button type="button" class="ghost lang-toggle" data-lang-toggle>EN</button>
+    <button type="button" class="ghost theme-toggle" data-theme-toggle>Auto</button>
+  </div>
+</header>
+
+<main>
+  <section class="hero wrap">
+    <div class="hero-text">
+      <h1>See the space, not just the ball.</h1>
+      <p class="lead">Shadow Ball reads where every player stands and shows who controls the dangerous space, where each player could have been, and what to change at half-time. Free, in your browser.</p>
+      <div class="cta">
+        <a class="primary" href="playground.html">Open the tactics board</a>
+        <a class="ghost" href="replay.html">Watch a match replay</a>
+      </div>
+    </div>
+    <figure class="hero-board">
+      <div class="pitch-holder"><canvas id="heroPitch" aria-label="A mid-block: blue defends, the shaded space shows who controls it"></canvas></div>
+      <figcaption><span class="sw sw-h"></span>space your team controls <span class="sw sw-a"></span>space they control <span class="sw sw-m"></span>best move the model finds · <span id="heroDenied"></span></figcaption>
+    </figure>
+  </section>
+
+  <section class="tools wrap" aria-labelledby="toolsTitle">
+    <h2 id="toolsTitle" class="sec-title">Three ways to use it</h2>
+    <article class="tool tool-main">
+      <div>
+        <h3>Tactics board</h3>
+        <p>Pick two LaLiga 2026/27 sides, a formation and the eleven. Choose a moment (build-up, high press, mid-block, final-third attack, a ball lost high, a low block), then drag players and the ball. The model updates on every move.</p>
+        <a class="primary" href="playground.html">Open the tactics board</a>
+      </div>
+      <div>
+        <ul class="ticks">
+          <li>Share of the dangerous space you own or deny</li>
+          <li>Rest defence: what you would still hold if the ball were lost now</li>
+          <li>The three single moves worth most, and a four-player unit move to try</li>
+        </ul>
+      </div>
+    </article>
+    <article class="tool">
+      <h3>Match replay</h3>
+      <p>Fifteen minutes of a real match (open data from Metrica Sports, players shown by number) as a bench would see it: the live pitch, the Shadow pitch with each player's best position, pressing traps, fatigue, and from the second half a plan built from the first.</p>
+      <a class="ghost" href="replay.html">Watch the replay</a>
+    </article>
+    <article class="tool" id="own">
+      <h3>Your own match</h3>
+      <p>Film a game from a high, wide angle. The free Python tools turn the video into tracking on your computer (nothing is uploaded), then open the result here.</p>
+      <ol class="steps">
+        <li><code>python run.py video frame match.mp4</code>, then mark four pitch points on <a href="calibrate.html">the calibration page</a> (the picture stays in your browser)</li>
+        <li><code>python run.py video track match.mp4 --calib calib.json</code> and the commands it prints</li>
+        <li>Open the <code>clip.json</code> it writes</li>
+      </ol>
+      <a class="ghost" href="replay.html#own">Open my clip.json</a>
+    </article>
+  </section>
+
+  <section class="method wrap" aria-labelledby="methodTitle">
+    <div>
+      <h2 id="methodTitle" class="sec-title">What the numbers mean</h2>
+      <p>For every spot on the pitch the model asks who would get there first, then weights the spot by how often the ball reaches the box from there. Your share of that weighted space is <b>space owned</b> with the ball and <b>space denied</b> without it.</p>
+      <p>Does it matter? When the defending side denies the most space, attackers reach the final third within 10 seconds far less often:</p>
+    </div>
+    <div class="table-wrap">
+      <table class="valid">
+        <caption>Final third reached within 10 s, high vs low space denied</caption>
+        <thead><tr><th scope="col">Match</th><th scope="col">High denial</th><th scope="col">Low denial</th></tr></thead>
+        <tbody>
+          <tr><td>Open game 1</td><td>27.3%</td><td>38.0%</td></tr>
+          <tr><td>Open game 2</td><td>28.1%</td><td>43.7%</td></tr>
+          <tr><td>Open game 3</td><td>15.3%</td><td>24.6%</td></tr>
+          <tr><td>Competition match</td><td>20.8%</td><td>30.9%</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="limits wrap" aria-labelledby="limitsTitle">
+    <h2 id="limitsTitle" class="sec-title">What it cannot do yet</h2>
+    <ul>
+      <li>The model knows nothing about offside, pressure on the ball or passing lanes, so defensive advice leans towards dropping deeper.</li>
+      <li>From video, players are found well (86–89% within 2 m in tests) but dead balls are not, so possession from video is still rough.</li>
+      <li>Squads come from club sites and Wikipedia; a few pages had not been updated this season. Every name can be changed on the board.</li>
+      <li>Chemistry between neighbouring players is our own indicator and has not been checked against results.</li>
+    </ul>
+  </section>
+</main>
+
+<footer class="site-foot wrap">
+  <p><b>Shadow Ball</b> · by <a href="https://github.com/Epinnn14">epinnn</a> · <a href="https://github.com/Epinnn14/shadow-ball">source code</a></p>
+  <p>Match data: Metrica Sports sample data (github.com/metrica-sports/sample-data). Squads: club sites and Wikipedia. No club logos or player photos. Started as an entry to More Than A Hack 2027.</p>
+</footer>
+
+<script src="data.js?v=20261122a"></script>
+<script src="threat.js?v=20261122a"></script>
+<script src="model.js?v=20261122a"></script>
+<script src="pitch.js?v=20261122a"></script>
+<script src="home.js?v=20261122a"></script>
+</body>
+</html>

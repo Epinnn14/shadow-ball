@@ -1,5 +1,6 @@
 # Match data: licensed for the competition only, never committed
-data/
+/data/
+# (docs/data/ is the public website: open Metrica data only)
 *.mp4
 cache/
 submissions/
@@ -19,3 +20,6 @@ venv/
 
 # External training data (Metrica open sample data), never committed
 external/
+site/
+yolo*.pt
+*.mp4

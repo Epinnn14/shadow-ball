@@ -53,7 +53,8 @@ def summary(labels):
 def validate(path):
     """Run the organisers' validator on a file. Returns True if it passes."""
     script = os.path.join(paths.EVAL_DIR, "validate_submission.py")
-    result = subprocess.run([sys.executable, script, path], capture_output=True, text=True)
+    result = subprocess.run([sys.executable, script, path, "--rows", str(paths.N_FRAMES)],
+                            capture_output=True, text=True)
     print(result.stdout.strip())
     if result.returncode != 0:
         print(result.stderr.strip())
@@ -66,8 +67,14 @@ def score(results_dir=None, extra_args=()):
     Use it to check correctness, never to choose between versions (see EVALUATION.md).
     """
     script = os.path.join(paths.EVAL_DIR, "run_evaluation.py")
-    out_dir = os.path.join(paths.REPO, "experiments", "scoreboard")
+    out_dir = os.path.join(paths.REPO, "experiments", "scoreboard", "" if paths.GAME == "BAR-ATH" else paths.GAME.lower())
     os.makedirs(out_dir, exist_ok=True)
     cmd = [sys.executable, script, "--results", results_dir or paths.SUBMISSIONS_DIR,
            "--out", out_dir] + list(extra_args)
+    if paths.OPEN_DATA:
+        # open games: the event-derived reference labels (python run.py --game ... reference)
+        if not os.path.isfile(paths.REFERENCE_LABELS):
+            from . import reference
+            reference.build()
+        cmd += ["--gt", paths.REFERENCE_LABELS]
     return subprocess.run(cmd).returncode

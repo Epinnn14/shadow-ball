@@ -68,7 +68,7 @@ def run(roles, track, attacks_right):
                 rows.append({
                     "team": team, "half": int(half), "label": label,
                     "minute_from": round((first + w0 - paths.HALVES[half - 1][0]) / paths.FPS / 60
-                                         + (0 if half == 1 else 45)),
+                                         + (0 if half == 1 else paths.H2)),
                     "coverage": round(float(ok.mean()), 3),
                     "distance_m": round(float(np.nansum(sp) / paths.FPS), 1),
                     "hsr_m": round(float(np.nansum(np.where(sp > HSR, sp, 0)) / paths.FPS), 1),
@@ -86,7 +86,7 @@ def run(roles, track, attacks_right):
 
 
 def save(df, heat):
-    out = os.path.join(paths.REPO, "exports")
+    out = paths.EXPORTS_DIR
     os.makedirs(out, exist_ok=True)
     df.to_parquet(os.path.join(out, "movement.parquet"), index=False)
     np.savez_compressed(os.path.join(out, "heatmaps.npz"), **heat)

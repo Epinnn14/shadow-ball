@@ -11,6 +11,9 @@
   const fmt1 = (v) => (Math.round(v * 10) / 10).toFixed(1);
   const params = new URLSearchParams(location.search);
   const narrow = () => matchMedia('(max-width: 900px)').matches;
+  // Static hosting (no run.py serve): no /api, no laptop-phone sync, line-up kept in this browser only.
+  const STATIC = !!window.SB_STATIC;
+  const api = (path, opts) => (STATIC ? Promise.reject(new Error('static')) : fetch(path, opts));
   const CSS = getComputedStyle(document.documentElement);
   const COL = { shadow: '#A78BFA', ok: '#4ADE80', warn: '#FBBF24', bad: '#F87171', D: '#3A3F47' };
   const LEVEL = { red: COL.bad, amber: COL.warn, green: COL.ok, 'no data': '#4B5159' };
@@ -23,9 +26,19 @@
   let lineup = null, roleToPlayer = {};
 
   // ================================================================== load
+  // replay.html#own: the viewer opens a clip.json from their own computer (read locally, never uploaded)
+  const ownClip = location.hash === '#own' ? new Promise((resolve) => {
+    $('loading').classList.add('gone'); $('ownPanel').hidden = false; document.body.classList.add('own-wait');
+    $('ownFile').onchange = (e) => {
+      const f = e.target.files[0]; if (!f) return;
+      f.text().then((txt) => { const c = JSON.parse(txt); if (!c.meta || !c.frames) throw new Error('bad'); $('ownPanel').hidden = true; document.body.classList.remove('own-wait'); $('loading').classList.remove('gone'); resolve(c); })
+        .catch(() => { $('ownError').textContent = 'That file is not a Shadow Ball clip.json. Make it with python run.py demo.'; });
+    };
+  }) : null;
+  window.addEventListener('hashchange', () => location.reload());
   Promise.all([
-    fetch('data/clip.json').then((r) => { if (!r.ok) throw new Error('No clip.json yet: run python run.py demo'); return r.json(); }),
-    fetch('api/lineup', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : { lineup: null })).catch(() => ({ lineup: null })),
+    ownClip || fetch('data/clip.json').then((r) => { if (!r.ok) throw new Error('No clip.json yet: run python run.py demo'); return r.json(); }),
+    api('api/lineup', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : { lineup: null })).catch(() => ({ lineup: null })),
   ]).then(([clip, saved]) => init(clip, saved.lineup)).catch((e) => { $('loading').textContent = e.message; });
 
   function init(clip, savedLineup) {
@@ -38,7 +51,7 @@
     initShadow();
     C.events.sort((a, b) => a.frame - b.frame);
     half1End = (C.runs.find((r) => r[1] === 'end') || [Infinity])[0] - 1;
-    S.follow = params.get('mode') === 'follow' || (params.get('mode') !== 'lead' && narrow());
+    S.follow = !STATIC && (params.get('mode') === 'follow' || (params.get('mode') !== 'lead' && narrow()));
     lineup = savedLineup || readLocal() || defaultLineup();
     for (const p of lineup.squad) {                       // line-ups saved before profiles existed
       const d = D.SQUAD.find((q) => q.id === p.id);
@@ -49,10 +62,16 @@
     bindUI();
     buildViews();
     $('loading').classList.add('gone');
-    const showSetup = !S.follow && !savedLineup && !readLocal() && params.get('setup') !== '0';
+    if (meta.open_data && $('spSource')) $('spSource').textContent = meta.source && /video/.test(meta.source) ? 'since kick-off · none in a video' : 'since kick-off · event data';
+    if (meta.source) {
+      $('source').hidden = false;
+      $('source').innerHTML = `Data: ${esc(meta.source)}. Players are shown by number only. Shadow Ball by <a href="https://github.com/Epinnn14">epinnn</a> · <a href="https://github.com/Epinnn14/shadow-ball">source code</a> · <a href="playground.html">tactics board</a>`;
+    }
+    const showSetup = !STATIC && !S.follow && !savedLineup && !readLocal() && params.get('setup') !== '0';
     if (showSetup) openSetup(); else { S.playing = !S.follow && params.get('autoplay') !== '0'; }
     updateFollow();
     requestAnimationFrame(loop);
+    window.addEventListener('sb-theme', () => { htKey = ''; panels(true); });
     setInterval(sync, 600);
     if (S.follow) setInterval(pullLineup, 8000);
   }
@@ -111,10 +130,8 @@
       const off = document.createElement('canvas'); off.width = this.c.width; off.height = this.c.height;
       const real = this.ctx; this.ctx = off.getContext('2d'); const g = this.ctx;
       g.setTransform(this.d, 0, 0, this.d, 0, 0);
-      g.fillStyle = '#21522F'; g.fillRect(0, 0, this.w, this.h);
-      const n = 14; for (let k = 0; k < n; k++) {         // mowing stripes across the length
-        this.rect(-3 + k * (L + 6) / n, -3, -3 + (k + 1) * (L + 6) / n, W + 3); g.fillStyle = k % 2 ? '#2A6A3E' : '#2F7445'; g.fill();
-      }
+      paintGrass(g, this.w, this.h, (k, n) => this.rect(-3 + k * (L + 6) / n, -3, -3 + (k + 1) * (L + 6) / n, W + 3));
+      g.save(); g.shadowColor = 'rgba(255,255,255,.35)'; g.shadowBlur = 1.5;
       g.strokeStyle = 'rgba(255,255,255,0.82)'; g.lineWidth = Math.max(1, 0.13 * this.sc); g.lineJoin = 'round';
       const line = (pts, c) => { this.path(pts, c); g.stroke(); };
       line([[0, 0], [L, 0], [L, W], [0, W]], true);
@@ -131,9 +148,8 @@
         for (const cy of [0, W]) line(this.arcPts(gx, cy, 1, side ? (cy ? Math.PI : Math.PI / 2) : (cy ? -Math.PI / 2 : 0), side ? (cy ? 1.5 * Math.PI : Math.PI) : (cy ? 0 : Math.PI / 2), 8));
       }
       const [cxs, cys] = this.S(L / 2, W / 2); g.beginPath(); g.arc(cxs, cys, Math.max(1.2, 0.25 * this.sc), 0, 7); g.fillStyle = 'rgba(255,255,255,.85)'; g.fill();
-      const vg = g.createRadialGradient(this.w / 2, this.h / 2, Math.min(this.w, this.h) * 0.3, this.w / 2, this.h / 2, Math.max(this.w, this.h) * 0.75);
-      vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.28)');
-      g.fillStyle = vg; g.fillRect(0, 0, this.w, this.h);
+      g.restore();
+      lightPitch(g, this.w, this.h);
       this.ctx = real; return off;
     }
     label(text, x, y, dy, opts = {}) {
@@ -153,21 +169,79 @@
       g.lineTo(c - h * Math.cos(ang + 0.45), d - h * Math.sin(ang + 0.45)); g.closePath(); g.fill(); g.restore();
     }
   }
+
+  // ---- soft realism: grass, floodlight, player tokens (shared by every pitch)
+  let grassNoise = null;
+  function noisePattern(g) {
+    if (!grassNoise) {
+      const c = document.createElement('canvas'); c.width = c.height = 96; const x = c.getContext('2d'), im = x.createImageData(96, 96);
+      let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+      for (let i = 0; i < im.data.length; i += 4) { const v = rnd(); const blade = v > 0.86 ? 255 : v < 0.14 ? 0 : 128;
+        im.data[i] = im.data[i + 1] = im.data[i + 2] = blade; im.data[i + 3] = blade === 128 ? 0 : 20; }
+      x.putImageData(im, 0, 0); grassNoise = c;
+    }
+    return g.createPattern(grassNoise, 'repeat');
+  }
+  function paintGrass(g, w, h, stripe) {
+    const base = g.createLinearGradient(0, 0, 0, h); base.addColorStop(0, '#3B8A4E'); base.addColorStop(1, '#2C7140');
+    g.fillStyle = base; g.fillRect(0, 0, w, h);
+    const n = 14; for (let k = 0; k < n; k++) { stripe(k, n); g.fillStyle = k % 2 ? 'rgba(255,255,255,.045)' : 'rgba(0,0,0,.055)'; g.fill(); }
+    g.fillStyle = noisePattern(g); g.fillRect(0, 0, w, h);
+  }
+  function lightPitch(g, w, h) {           // one soft floodlight from above, darker towards the touchlines
+    const top = g.createRadialGradient(w * 0.5, -h * 0.25, h * 0.2, w * 0.5, h * 0.2, Math.max(w, h) * 0.9);
+    top.addColorStop(0, 'rgba(255,255,240,.16)'); top.addColorStop(1, 'rgba(255,255,240,0)');
+    g.fillStyle = top; g.fillRect(0, 0, w, h);
+    const vg = g.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.35, w / 2, h / 2, Math.max(w, h) * 0.75);
+    vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,20,8,.30)');
+    g.fillStyle = vg; g.fillRect(0, 0, w, h);
+  }
+  function shade(hex, k) {                 // k > 0 lighter, k < 0 darker
+    const n = parseInt(hex.slice(1), 16), f = (c) => Math.round(k > 0 ? c + (255 - c) * k : c * (1 + k));
+    return `rgb(${f(n >> 16)},${f((n >> 8) & 255)},${f(n & 255)})`;
+  }
+  function token(g, a, b, r, kit, ring = 'rgba(255,255,255,.92)') {
+    g.beginPath(); g.ellipse(a + r * 0.18, b + r * 0.62, r * 0.98, r * 0.42, 0, 0, 7); g.fillStyle = 'rgba(0,18,6,.32)'; g.fill();
+    const body = g.createRadialGradient(a - r * 0.35, b - r * 0.4, r * 0.1, a, b, r * 1.05);
+    body.addColorStop(0, shade(kit, 0.32)); body.addColorStop(0.55, kit); body.addColorStop(1, shade(kit, -0.28));
+    g.beginPath(); g.arc(a, b, r, 0, 7); g.fillStyle = body; g.fill();
+    g.lineWidth = Math.max(1.2, r * 0.16); g.strokeStyle = ring; g.stroke();
+  }
+  const tok = (name) => CSS.getPropertyValue(name).trim();
+  const H2 = () => (meta && meta.h2_minute != null ? meta.h2_minute : 45);   // minute the second half starts
   function roundRect(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
   function hexA(hex, a) { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; }
 
   // ================================================================== line-up
   function defaultLineup() {
+    if (meta.squad) {               // open data: anonymous players and the shape the tracking found
+      const f = D.FORMATIONS[meta.formation.H] ? meta.formation.H : '4-4-2';
+      // the tracking's role names can differ from the formation's slot names (CM vs LM):
+      // keep exact matches, then give each empty slot the leftover player from the nearest line
+      const slots = D.slots(f).map((x) => x.label), xi = {}, left = [];
+      const line = (r) => (r === 'GK' ? 0 : /B$|CB$/.test(r) ? 1 : /(ST|CF)$/.test(r) ? 3 : 2);
+      for (const [role, pid] of Object.entries(meta.squad.xi)) {
+        if (slots.includes(role) && !xi[role]) xi[role] = pid; else left.push([role, pid]);
+      }
+      for (const slot of slots) {
+        if (xi[slot] || !left.length) continue;
+        left.sort((a, b) => Math.abs(line(a[0]) - line(slot)) - Math.abs(line(b[0]) - line(slot)));
+        xi[slot] = left.shift()[1];
+      }
+      return { formation: f, squad: JSON.parse(JSON.stringify(meta.squad.squad)), xi,
+               oppName: meta.teams.A, kitH: '#3D7BFF', kitA: '#F2613F' };
+    }
     return { formation: '4-2-1-3', squad: JSON.parse(JSON.stringify(D.SQUAD)), xi: Object.assign({}, D.DEFAULT_XI),
              oppName: meta.teams.A, kitH: '#3D7BFF', kitA: '#F2613F' };
   }
-  function readLocal() { try { const s = localStorage.getItem('sb_lineup'); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
+  function lineupKey() { return meta && meta.open_data ? 'sb_lineup_open' : 'sb_lineup'; }
+  function readLocal() { try { const s = localStorage.getItem(lineupKey()); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
   function saveLineup() {
-    try { localStorage.setItem('sb_lineup', JSON.stringify(lineup)); } catch (e) { /* storage full or blocked */ }
-    fetch('api/lineup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lineup }) }).catch(() => {});
+    try { localStorage.setItem(lineupKey(), JSON.stringify(lineup)); } catch (e) { /* storage full or blocked */ }
+    api('api/lineup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lineup }) }).catch(() => {});
   }
   function pullLineup() {
-    fetch('api/lineup', { cache: 'no-store' }).then((r) => r.json()).then((d) => {
+    api('api/lineup', { cache: 'no-store' }).then((r) => r.json()).then((d) => {
       if (d.lineup && JSON.stringify(d.lineup) !== JSON.stringify(lineup)) { lineup = d.lineup; applyLineup(); }
     }).catch(() => {});
   }
@@ -393,7 +467,7 @@
     const style = p && p.photo ? `background-image:url(${p.photo})` : '';
     return `<span class="av team" style="--kit:var(--${team === 'H' ? 'home' : 'away'});${style}">${p && p.photo ? '' : (p ? p.num : role)}</span>`;
   }
-  const initials = (n) => n.trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
+  const initials = (n) => (/^Player \d+$/.test(n.trim()) ? n.trim().slice(7) : n.trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase());
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   $('addPlayer').onclick = () => {
     const num = Math.max(0, ...lineup.squad.map((p) => p.num)) + 1;
@@ -403,7 +477,7 @@
   // ================================================================== time + sync
   const videoFrame = (t) => meta.first + Math.round(t * meta.fps);
   function clockText(f) {
-    const s = (f - meta.half_start) / meta.fps + (meta.half === 2 ? 45 * 60 : 0);
+    const s = (f - meta.half_start) / meta.fps + (meta.half === 2 ? H2() * 60 : 0);
     return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
   }
   let lastPost = 0, lastSnap = 0;
@@ -430,7 +504,7 @@
                                worst_zone: S.pressing.worst ? { where: P_BAND.H[S.pressing.worst.band], won_back_press: Math.round(S.pressing.worst.regP * 100), won_back_hold: Math.round(S.pressing.worst.regH * 100),
                                                                box_press: Math.round(S.pressing.worst.boxP * 100), box_hold: Math.round(S.pressing.worst.boxH * 100) } : null } : null,
     };
-    fetch('api/snapshot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(snap) }).catch(() => {});
+    api('api/snapshot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(snap) }).catch(() => {});
   }
   function shadowSnapshot(f) {
     if (!SH.rows.length) return null;
@@ -450,7 +524,7 @@
   }
   function sync() {
     if (S.follow) {
-      fetch('api/state', { cache: 'no-store' }).then((r) => r.json()).then((st) => {
+      api('api/state', { cache: 'no-store' }).then((r) => r.json()).then((st) => {
         if (st.frame == null) return;
         let t = (st.frame - meta.first) / meta.fps; if (st.playing) t += (st.now - st.t) * st.speed;
         if (Math.abs(t - S.t) > 1 || S.playing !== st.playing) S.t = Math.max(0, Math.min(duration, t));
@@ -458,11 +532,11 @@
       }).catch(() => {});
     } else if (performance.now() - lastPost > 500 && $('setup').hidden) {
       lastPost = performance.now();
-      fetch('api/state', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      api('api/state', { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ frame: videoFrame(S.t), playing: S.playing, speed: S.speed }) }).catch(() => {});
     }
   }
-  function updateFollow() { const b = $('followBtn'); b.hidden = false; b.textContent = S.follow ? 'Follow laptop ✓' : 'Follow laptop'; }
+  function updateFollow() { const b = $('followBtn'); b.hidden = STATIC; if (STATIC) return; b.textContent = S.follow ? 'Follow laptop ✓' : 'Follow laptop'; }
   function markSpeed() { document.querySelectorAll('#speeds button').forEach((b) => b.classList.toggle('on', +b.dataset.speed === S.speed)); }
   function takeOver() { if (S.follow) { S.follow = false; updateFollow(); } }
 
@@ -479,6 +553,7 @@
     $('reportBtn').onclick = openReport;
     $('repClose').onclick = () => { $('report').hidden = true; document.body.classList.remove('report-open'); };
     $('repPrint').onclick = () => window.print();
+    $('repPrint').hidden = !!window.SB_NO_PRINT;      // hosts whose frame blocks printing
     $('startBtn').onclick = closeSetup;
     document.querySelectorAll('#setupTabs button').forEach((b) => b.onclick = () => { setupTeam = b.dataset.t; selSlot = null; stepMode = false; editId = null; renderSetup(); });
     $('stepBtn').onclick = () => { stepMode = !stepMode; selSlot = stepMode ? D.slots(curFormation())[0].label : null; renderSetup(); };
@@ -526,7 +601,7 @@
   }
   function framePlayers(i) { return C.frames[i][3].map((p) => { const [x, y] = tf(p[3], p[4]); return { k: key(p), team: p[1] === 0 ? 'H' : 'A', role: labels[p[2]], x, y, v: p[5] }; }); }
 
-  function blockEnd(half, minute) { return half < meta.half ? -Infinity : meta.half_start + (minute + 5 - (half === 1 ? 0 : 45)) * 60 * meta.fps; }
+  function blockEnd(half, minute) { return half < meta.half ? -Infinity : meta.half_start + (minute + 5 - (half === 1 ? 0 : H2())) * 60 * meta.fps; }
   function latestStamina(f) { const out = {}; for (const r of C.stamina) if (blockEnd(r.half, r.minute) <= f) out[`${r.team}:${r.label}`] = r; return out; }
 
   // ================================================================== views
@@ -554,6 +629,7 @@
     shV = new PitchView($('shadowPitch'), { portrait: narrow(), m: 2.5 });
     shV.layout($('shadowPitch').parentElement.clientWidth);
     advCache = -1; heatCache = ''; S.feedKey = ''; shKey = ''; simKey = ''; pressCache = ''; leakCache = '';
+    phase2Init();
   }
 
   // a 3 m grid painted as a small image, then stretched with smoothing onto the pitch.
@@ -587,8 +663,7 @@
     const r = Math.max(6.5, 1.15 * v.sc);
     for (const p of st.players) {
       const [a, b] = v.S(p.x, p.y), kit = p.team === 'H' ? kitH : kitA;
-      g.beginPath(); g.ellipse(a + r * 0.25, b + r * 0.55, r * 0.95, r * 0.45, 0, 0, 7); g.fillStyle = 'rgba(0,0,0,.28)'; g.fill();
-      g.beginPath(); g.arc(a, b, r, 0, 7); g.fillStyle = kit; g.fill(); g.lineWidth = 1.5; g.strokeStyle = 'rgba(255,255,255,.9)'; g.stroke();
+      token(g, a, b, r, kit);
       if (S.sel === p.k) { g.beginPath(); g.arc(a, b, r + 6, 0, 7); g.strokeStyle = COL.shadow; g.lineWidth = 2.5; g.stroke(); }
       const pl = p.team === 'H' ? roleToPlayer[p.role] : oppToPlayer[p.role];
       g.fillStyle = '#fff'; g.font = `700 ${Math.round(r * 0.95)}px ${CSS.getPropertyValue('--mono')}`; g.textAlign = 'center'; g.textBaseline = 'middle';
@@ -717,9 +792,9 @@
     const r = Math.max(5.5, 0.95 * v.sc), mover = new Map(moves.map((m) => [m.role, m]));
     for (const p of ps) {           // their players small and dim, ours solid; movers get a ring
       const [a, b] = v.S(p.x, p.y), ours = p.team === team;
-      g.beginPath(); g.arc(a, b, ours ? r : r * 0.8, 0, 7);
-      g.fillStyle = hexA(p.team === 'H' ? lineup.kitH : lineup.kitA, ours ? 0.95 : 0.5); g.fill();
-      g.lineWidth = 1.2; g.strokeStyle = ours ? 'rgba(255,255,255,.85)' : 'rgba(255,255,255,.35)'; g.stroke();
+      if (ours) token(g, a, b, r, p.team === 'H' ? lineup.kitH : lineup.kitA);
+      else { g.beginPath(); g.arc(a, b, r * 0.8, 0, 7); g.fillStyle = hexA(p.team === 'H' ? lineup.kitH : lineup.kitA, 0.5); g.fill();
+        g.lineWidth = 1.2; g.strokeStyle = 'rgba(255,255,255,.35)'; g.stroke(); }
       if (ours && team === 'H') {
         const pl = roleToPlayer[p.role];
         g.fillStyle = '#fff'; g.font = `700 ${Math.round(r * 0.9)}px ${CSS.getPropertyValue('--mono')}`; g.textAlign = 'center'; g.textBaseline = 'middle';
@@ -983,7 +1058,7 @@
   // the match average; random = 50) + dangerous space held (mean contribution vs the average for the
   // position family in this match). Shown on the coach's own line-up card, both teams.
   function shadowRatings(f) {
-    const nowMin = Math.floor((f - meta.half_start) / meta.fps / 60) + (meta.half === 2 ? 45 : 0), acc = {};
+    const nowMin = Math.floor((f - meta.half_start) / meta.fps / 60) + (meta.half === 2 ? H2() : 0), acc = {};
     for (const [team, li, half, minute, n, score, contrib] of C.ratings || []) {
       if (half > meta.half || (half === meta.half && minute >= nowMin)) continue;    // completed minutes only
       const k = team + ':' + labels[li], a = acc[k] || (acc[k] = { n: 0, score: 0, contrib: 0 });
@@ -1441,15 +1516,15 @@
     c.width = w * d; c.height = h * d; const g = c.getContext('2d'); g.setTransform(d, 0, 0, d, 0, 0); g.clearRect(0, 0, w, h);
     const h1 = C.momentum.filter((m) => m[0] === 1).length, total = h1 + 50, bw = w / total;
     const nowMin = (f - meta.half_start) / meta.fps / 60, mid = h / 2;
-    g.fillStyle = '#1E2229'; g.fillRect(0, mid - 0.5, w, 1);
+    g.fillStyle = tok('--s3'); g.fillRect(0, mid - 0.5, w, 1);
     C.momentum.forEach((m, i) => {
       if (m[0] === meta.half && i - (meta.half === 2 ? h1 : 0) > nowMin) return;
       const x = i * bw;
       g.fillStyle = lineup.kitH; g.fillRect(x + 0.5, mid - m[2] * (mid - 2), Math.max(1, bw - 1.5), m[2] * (mid - 2));
       g.fillStyle = lineup.kitA; g.fillRect(x + 0.5, mid + 1, Math.max(1, bw - 1.5), m[3] * (mid - 2));
     });
-    g.fillStyle = '#5B626C'; g.fillRect(h1 * bw, 2, 1, h - 4);
-    const nx = ((meta.half === 2 ? h1 : 0) + nowMin) * bw; g.fillStyle = '#F1F3F6'; g.fillRect(nx, 0, 1.5, h);
+    g.fillStyle = tok('--dim'); g.fillRect(h1 * bw, 2, 1, h - 4);
+    const nx = ((meta.half === 2 ? h1 : 0) + nowMin) * bw; g.fillStyle = tok('--text'); g.fillRect(nx, 0, 1.5, h);
   }
 
   const laneIdx = (y) => (y < W / 3 ? 0 : y < 2 * W / 3 ? 1 : 2);
@@ -1727,7 +1802,7 @@
       <header class="rh"><div><h1>${esc(meta.teams.H)} <span class="score">${score(f).H}–${score(f).A}</span> ${esc(opp)}</h1><p>Shadow Ball automatic report · up to ${clockText(f)} · ${lineup.formation} vs ${meta.formation.A}</p></div>
         <div class="rmark"><span class="mark"></span>Shadow<b>Ball</b></div></header>
       <section class="rblock"><h2>Match statistics</h2>${statsTable(f)}
-        <p class="rnote">Goals, chances, counter-attacks, box entries, long balls and set pieces: Metrica Smart Tagging (automatic, can be wrong). Possession, transitions, final-third entries, recoveries and running: the Shadow Ball pipeline, from tracking. Shots are not counted: the data has no shot events and the tactical camera often loses the ball in front of goal, so "chances created" is used instead. Distance counts completed 5-minute blocks and reads low whenever a player is not tracked.</p></section>
+        <p class="rnote">Goals, chances, counter-attacks, box entries, long balls and set pieces: ${meta.open_data ? 'Metrica event data (tagged by people)' : 'Metrica Smart Tagging (automatic, can be wrong)'}. Possession, transitions, final-third entries, recoveries and running: the Shadow Ball pipeline, from tracking. Shots are not counted: the data has no shot events and the tactical camera often loses the ball in front of goal, so "chances created" is used instead. Distance counts completed 5-minute blocks and reads low whenever a player is not tracked.</p></section>
       <section class="rkpis rk-hidden">
         ${kpi('Minutes in possession', pct(r.poss), `${esc(opp1)} ${pct(r.poss == null ? null : 1 - r.poss)}`)}
         ${kpi('Ball in their third', pct(r.att), `in ours ${pct(r.def)}`)}
@@ -1753,7 +1828,7 @@
         <section class="rblock"><h2>1v1 duels · 10 min</h2><canvas id="repDuel"></canvas><div id="repDuelL"></div></section>
       </div>
       ${shadowReportHtml(f)}
-      <footer class="rf">Positions are tactical roles from tracking (substitutions are not visible yet). Set pieces from Smart Tagging, placed where the ball was seen; duels are estimates from player positions. Licensed match data: this report is for the team only.</footer>`;
+      <footer class="rf">Positions are tactical roles from tracking (substitutions are not visible yet). Set pieces from ${meta.open_data ? 'Metrica event data' : 'Smart Tagging'}, placed where the ball was seen; duels are estimates from player positions. ${meta.source ? 'Data: ' + esc(meta.source) + '.' : 'Licensed match data: this report is for the team only.'}</footer>`;
     $('report').hidden = false; document.body.classList.add('report-open');
     const wFull = $('repBody').clientWidth, wHalf = Math.floor((wFull - 20) / 2);
     const mk = (id, o, w) => { const v = new PitchView($(id), o); v.layout(w); return v; };
@@ -1898,11 +1973,144 @@
     $('baAfter').textContent = `${top.kind === 'line' ? `Line −${S.sim.drop.by} m` : 'Back five'} · theirs ${Math.round(e.after * 100)}%`;
   }
 
+  // ================================================================== half-time screen + chemistry
+  // (sb/phase2.py). Plan, heatmaps and passing are from the first half; the threat chart runs up
+  // to now; chemistry is this half up to the clip's first frame. Shown in the second half only.
+  let htViews = null, passTeam = 'H', chemTeam = 'H', htKey = '';
+  function phase2Init() {
+    const P = C.phase2;
+    if (!P || narrow() || meta.half !== 2) { if ($('htSection')) $('htSection').hidden = true; return; }
+    $('htSection').hidden = false;
+    const w = (id) => $(id).parentElement.clientWidth - 28;
+    htViews = {
+      heatH: new PitchView($('htHeatH'), { x0: 0, x1: L, m: 1 }), heatA: new PitchView($('htHeatA'), { x0: 0, x1: L, m: 1 }),
+      pass: new PitchView($('passMap'), { x0: 0, x1: L, m: 1.5 }), chem: new PitchView($('chemMap'), { x0: 0, x1: L, m: 1.5 }),
+    };
+    const half = Math.floor((w('htThreatChart') - 10) / 2);
+    htViews.heatH.layout(half); htViews.heatA.layout(half);
+    htViews.pass.layout(w('passMap')); htViews.chem.layout(w('chemMap'));
+    for (const [tabs, set] of [['passTabs', (t) => { passTeam = t; passCard(); }], ['chemTabs', (t) => { chemTeam = t; chemCard(); }]]) {
+      $(tabs).querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
+        $(tabs).querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b)); set(b.dataset.t);
+      }));
+    }
+    $('passUs').textContent = meta.teams.H; $('passThem').textContent = lineup.oppName || meta.teams.A;
+    $('chemUs').textContent = meta.teams.H; $('chemThem').textContent = lineup.oppName || meta.teams.A;
+    planCardHT(); heatCards(); passCard(); chemCard(); htKey = '';
+  }
+  function planCardHT() {
+    const plan = C.phase2.plan, opp = lineup.oppName || meta.teams.A;
+    if (!plan) { $('htPlan').hidden = true; return; }
+    $('htGrades').innerHTML = `<tr><th></th><th>${esc(meta.teams.H)}</th><th>${esc(opp)}</th></tr>` + plan.grades.map((g) =>
+      `<tr title="${esc(g.note || '')}"><td>${esc(g.name)}</td><td class="n${g.us !== g.them && g.better ? ' win' : ''}">${esc(g.us)}</td><td class="n${g.us !== g.them && !g.better ? ' win' : ''}">${esc(g.them)}</td></tr>`).join('');
+    const li = (r) => `<li><b>${esc(r.title)}</b><span>${esc(r.evidence)}</span></li>`;
+    $('htAttack').innerHTML = plan.attack.length ? plan.attack.map(li).join('') : '<li><span>No clear lever in the numbers</span></li>';
+    $('htDefend').innerHTML = plan.defend.length ? plan.defend.map(li).join('') : '<li><span>No clear risk in the numbers</span></li>';
+  }
+  function heatCards() {
+    const heat = C.phase2.possession_threat.heat;
+    for (const [team, v, cap, kit] of [['H', htViews.heatH, 'htHeatHCap', lineup.kitH], ['A', htViews.heatA, 'htHeatACap', lineup.kitA]]) {
+      const g = v.ctx; v.begin();
+      const grid = heat[team], nx = grid.length, ny = grid[0].length, cx = L / nx, cy = W / ny;
+      for (let i = 0; i < nx; i++) for (let j = 0; j < ny; j++) {
+        const a = grid[i][j]; if (a < 0.05) continue;
+        v.rect(i * cx, j * cy, (i + 1) * cx, (j + 1) * cy); g.fillStyle = hexA(kit, Math.min(0.85, a * 0.9)); g.fill();
+      }
+      $(cap).textContent = `${team === 'H' ? meta.teams.H : (lineup.oppName || meta.teams.A)} · first half, attacking →`;
+    }
+  }
+  function threatCard(f) {
+    const P = C.phase2.possession_threat, minuteNow = Math.floor(clockMinute(f));
+    const rows = P.minutes.filter((m) => m[1] < minuteNow);   // completed minutes only
+    const key = minuteNow + lineup.kitH + lineup.kitA;
+    if (key === htKey) return; htKey = key;
+    // possession bar: first half, and this half so far
+    const live = rows.filter((m) => m[0] === meta.half && m[2] !== null);
+    const now = live.length ? live.reduce((s, m) => s + m[2], 0) / live.length : null;
+    const h1 = P.possession['1'] ?? P.possession[1];
+    const bar = (share, label) => share == null ? '' : `<div style="width:${Math.round(share * 100)}%;background:${lineup.kitH}">${label} ${Math.round(share * 100)}%</div><div style="width:${100 - Math.round(share * 100)}%;background:${lineup.kitA}">${Math.round(100 - share * 100)}%</div>`;
+    $('htPoss').innerHTML = bar(now != null ? now : h1, now != null ? 'this half' : 'first half');
+    // mirrored bars: home threat up, away down
+    const cv = $('htThreatChart'), d = window.devicePixelRatio || 1, wpx = cv.parentElement.clientWidth - 28, hpx = 120;
+    cv.width = wpx * d; cv.height = hpx * d; cv.style.height = hpx + 'px';
+    const g = cv.getContext('2d'); g.setTransform(d, 0, 0, d, 0, 0); g.clearRect(0, 0, wpx, hpx);
+    const maxMin = Math.max(90, ...P.minutes.map((m) => m[1] + 1)), mx = Math.max(0.3, ...P.minutes.map((m) => Math.max(m[3], m[4])));
+    const X = (m) => 4 + (m / maxMin) * (wpx - 8), mid = hpx / 2, bw = Math.max(1.5, (wpx - 8) / maxMin - 1.2);
+    g.fillStyle = tok('--line'); g.fillRect(X(H2()) - 0.5, 4, 1, hpx - 8);
+    g.fillStyle = tok('--dim'); g.fillRect(4, mid - 0.5, wpx - 8, 1);
+    for (const m of rows) {
+      const hH = (m[3] / mx) * (mid - 6), hA = (m[4] / mx) * (mid - 6);
+      g.fillStyle = lineup.kitH; g.fillRect(X(m[1]), mid - hH, bw, hH);
+      g.fillStyle = lineup.kitA; g.fillRect(X(m[1]), mid, bw, hA);
+    }
+    for (const [fr, code, team] of C.match_events) {
+      if (code !== 'GOALS' || fr > f) continue;
+      const m = clockMinute(fr), x = X(m), y = team === 'H' ? 10 : hpx - 10;
+      g.beginPath(); g.arc(x, y, 4.5, 0, 7); g.fillStyle = tok('--text'); g.fill();
+    }
+    g.fillStyle = tok('--muted'); g.font = `11px ${CSS.getPropertyValue('--sans')}`;
+    g.textAlign = 'left'; g.fillText(meta.teams.H, 6, 12); g.fillText(lineup.oppName || meta.teams.A, 6, hpx - 4);
+    const sum = (k) => rows.reduce((s, m) => s + m[k], 0);
+    $('htThreatNote').textContent = `up to ${minuteNow}' · threat ${sum(3).toFixed(1)} vs ${sum(4).toFixed(1)}`;
+  }
+  function clockMinute(f) {
+    const [h1, h2] = C.phase2.half_starts;
+    return f >= h2 ? H2() + (f - h2) / meta.fps / 60 : (f - h1) / meta.fps / 60;
+  }
+  function passCard() {
+    const P = C.phase2.passing, v = htViews.pass, g = v.ctx; v.begin();
+    const data = P && P[passTeam];
+    if (!data) { $('passStats').innerHTML = ''; $('passNote').textContent = 'Passing networks need event data (who passed to whom). Tracking from a video has none; the open Metrica games do.'; return; }
+    const kit = passTeam === 'H' ? lineup.kitH : lineup.kitA, node = {};
+    for (const [num, x, y, n] of data.nodes) node[num] = { x, y, n };
+    const mx = Math.max(1, ...data.links.map((l) => l[2]));
+    for (const [a, b, n] of data.links) {
+      if (!node[a] || !node[b]) continue;
+      const [x0, y0] = v.S(node[a].x, node[a].y), [x1, y1] = v.S(node[b].x, node[b].y);
+      g.strokeStyle = hexA('#FFFFFF', 0.15 + 0.6 * n / mx); g.lineWidth = 1 + 5 * n / mx;
+      g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke();
+    }
+    const nmax = Math.max(1, ...data.nodes.map((q) => q[3]));
+    for (const [num, x, y, n] of data.nodes) {
+      const [a, b] = v.S(x, y), r = 5 + 9 * Math.sqrt(n / nmax);
+      token(g, a, b, r, kit);
+      g.fillStyle = '#fff'; g.font = `600 10px ${CSS.getPropertyValue('--mono')}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(String(num), a, b + 0.5);
+    }
+    const t = data.types, cell = (v, l) => `<div><b>${v}</b><span>${l}</span></div>`;
+    $('passStats').innerHTML = cell(data.passes, 'passes') + cell(Math.round(100 * data.success) + '%', 'kept the ball') + cell(t.forward, 'forward 10 m+') + cell(t.into_final_third, 'into final third')
+      + cell(t.long, 'long 30 m+') + cell(t.switch, 'switches') + cell(t.key, 'led to a shot') + cell(data.lost, 'ball lost');
+  }
+  function chemCard() {
+    const P = C.phase2.chemistry, v = htViews.chem, g = v.ctx; v.begin();
+    const data = P && P[chemTeam], rm = meta.role_means[chemTeam];
+    if (!data || !rm) { $('chemList').innerHTML = '<div class="row"><span>Not enough tracking yet</span></div>'; return; }
+    const depths = Object.keys(rm).filter((r) => r !== 'GK').map((r) => rm[r][0]);
+    const dMid = (Math.max(...depths) + Math.min(...depths)) / 2, dSpan = Math.max(10, Math.max(...depths) - Math.min(...depths));
+    const k = Math.min(3, (L * 0.7) / dSpan);   // spread the shape over the pitch; relative positions only
+    const pos = (r) => [L / 2 + (rm[r][0] - dMid) * k, rm[r][1]], col = (p) => (p >= 65 ? COL.ok : p >= 50 ? COL.warn : COL.bad);
+    for (const [a, b, p] of data.pairs) {
+      if (!rm[a] || !rm[b]) continue;
+      const [x0, y0] = v.S(...pos(a)), [x1, y1] = v.S(...pos(b));
+      g.strokeStyle = col(p); g.lineWidth = 3; g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke();
+      if (Math.hypot(pos(a)[0] - pos(b)[0], pos(a)[1] - pos(b)[1]) > 13) v.label(`${p}`, (pos(a)[0] + pos(b)[0]) / 2, (pos(a)[1] + pos(b)[1]) / 2, 0, { size: 9, mono: true, bg: 'rgba(10,11,13,.8)' });
+    }
+    const kit = chemTeam === 'H' ? lineup.kitH : lineup.kitA;
+    for (const r of Object.keys(rm)) {
+      if (r === 'GK') continue;
+      const [a, b] = v.S(...pos(r)); token(g, a, b, 9, kit);
+      v.label(r, pos(r)[0], pos(r)[1], 15, { size: 9 });
+    }
+    const weakest = data.pairs.slice().sort((a, b) => a[2] - b[2]).slice(0, 3);
+    $('chemList').innerHTML = `<div class="row"><b>Team chemistry</b><span class="pct" style="color:${col(data.team)}">${data.team}%</span></div>` +
+      weakest.map(([a, b, p, d, t, c, n]) => `<div class="row"><div><b>${a}–${b}</b><br><span>distance ${d}% · together ${t}% · cover ${c}%${n ? ` · ${n} pass${n === 1 ? '' : 'es'}` : ''}</span></div><span class="pct" style="color:${col(p)}">${p}%</span></div>`).join('');
+  }
+
   // ================================================================== loop
   let last = performance.now(), lastPanel = -1;
   function panels(force) {
     const st = interp(S.t), f = videoFrame(S.t), si = Math.max(0, Math.min(C.seconds.frames.length - 1, Math.floor(S.t)));
     squad(st, f, si, force); strip(f); advice(st); pressingCard(f); leakCard(f); lineupCard(f); simCards();
+    if (htViews) threatCard(f);
     if (!narrow()) { feed(f); fatigueMap(f); stats(f, si); momentumChart(f); channels(f, st); setPieces(f); duels(st); }
     planCard(f);
     postSnapshot(f);
@@ -1918,7 +2126,7 @@
     drawShadow();
     drawSims();
     $('scrub').value = S.t;
-    $('playBtn').classList.toggle('on', S.playing);
+    $('playBtn').classList.toggle('on', S.playing); $('onair').classList.toggle('playing', S.playing);
     $('clock').textContent = clockText(st.frame);
     const sc = score(st.frame), scTxt = `${meta.teams.H} ${sc.H}–${sc.A} ${(lineup.oppName || meta.teams.A)}`;
     if ($('match').dataset.score !== scTxt) { $('match').dataset.score = scTxt; $('match').innerHTML = `<b>${esc(scTxt)}</b> · ${lineup.formation} vs ${meta.formation.A}`; }

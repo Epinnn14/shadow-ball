@@ -1,6 +1,54 @@
-# Shadow Ball — Phase 1 (More Than A Hack 2027)
+# Shadow Ball (personal project by epinnn)
 
-Team of 5 (K lead, J, F, R, N). This repo produces the possession file for Phase 1:
+A free football coaching assistant: website on GitHub Pages (https://epinnn14.github.io/shadow-ball/,
+built into docs/ by scripts/build_site.py) + Python tools (tracking from video, possession, off-ball).
+Started as Látigo AI's More Than A Hack 2027 entry (did not reach the top 20, Nov 2026); that code is
+kept as history. The competition match (`--game BAR-ATH`, default) must keep regenerating the
+submitted file (sha256 c3eb7ed6…, 275 possessions): do not change v1-v4 / ballnet behaviour or
+`models/ballnet.pt` for it.
+
+## Website (demo/ -> docs/)
+
+- Pages: index.html (home, home.js/home.css), playground.html (tactics board), replay.html (bench
+  replay: app.js; `#own` opens a local clip.json; SB_STATIC on static hosts), calibrate.html.
+- Shared: style.css (design tokens at the top: navy ink, one violet accent = the Shadow Ball model
+  layer, Outfit + Work Sans, flat cards, only the pitch lifted), theme.js (Auto/Light/Dark),
+  i18n.js + i18n-id.js (EN/ID: exact phrases + regex patterns applied to rendered text; edit
+  data_src/i18n_id.py, then scripts/build_i18n.py; [data-no-i18n] opts out), pitch.js (board
+  drawing), model.js (pitch control x threat, tests/model_test.js).
+- Public site: open Metrica data only, players anonymous; credit "by epinnn"; no logos/photos.
+- Rebuild: build_playground_data.py, build_i18n.py, build_site.py (docs/ is committed).
+
+## Open games (portfolio)
+
+```
+python run.py --game METRICA-2 cache|ball-predict|v4|reference|score|roles|tactics|offball|demo|serve
+python scripts/build_site.py --game METRICA-2   # static site/ (SB_STATIC: no /api, no print)
+```
+
+- `sb/paths.py` game catalog; `SB_GAME` must be set before importing `sb` (run.py does it from `--game`).
+  Open games write to `cache/<game>/`, `submissions/<game>/`, `exports/<game>/`.
+- `sb/reference.py` reference labels from Metrica events, for MEASURING only. Set-piece hints are off
+  on open games (they would leak the reference).
+- Open games show players as "Player <shirt>" (`demo.open_game_squad`); never real names or photos.
+  Attribute the data: Metrica Sports sample data, github.com/metrica-sports/sample-data.
+- `sb/phase2.py` half-time screen (plan, possession & threat, heatmaps, passing network from events)
+  and chemistry; every card uses only what was known at that moment. See experiments/2026-11-20_*.md.
+- Hosted demo (open game 2 + playground): claude.ai artifact 8kWbpCy3Ty2h1uNdrMZYBq. Never host BAR-ATH.
+- Video input (`sb/video.py`, `run.py video frame|track`, `demo/calibrate.html`, extra deps in
+  requirements-video.txt): writes cache/video-<name>/ (+ meta.json) that registers game VIDEO-<NAME>.
+  `paths.VIDEO`, `paths.ANONYMOUS` (open or video: players by number), `paths.H2` (minute half 2 starts;
+  a video without --second-half is split into two equal parts). Tested only on synthetic video
+  (scripts/synthetic_video.py + video_eval.py). Never run it on the competition video.
+- Playground: demo/playground.html + playground.js, model in demo/model.js (same pitch control x threat
+  as offball, tests/model_test.js), squads demo/laliga.js from data_src/laliga_2026_27.txt, threat
+  surface demo/threat.js (mean of the 3 open games); `scripts/build_playground_data.py` rebuilds both.
+- UI "soft realism": light + dark tokens at the top of demo/style.css (dark under prefers-color-scheme
+  and [data-theme]); demo/theme.js = Auto/Light/Dark toggle; canvas text off the pitch uses tok('--x').
+
+## Phase 1 (competition match)
+
+Team of 5 (K lead, J, F, R, N). This part produces the possession file for Phase 1:
 for every tactical video frame, the label H (Barcelona in possession), A (Athletic), D (dead ball),
 or X (no answer). Ranking uses `spellF1` (whole possessions), tie-break `macroF1`.
 

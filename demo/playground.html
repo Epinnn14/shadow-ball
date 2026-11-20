@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Shadow Ball Tactics Board</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Work+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="style.css?v=20261122a">
+<link rel="stylesheet" href="playground.css?v=20261122a">
+<script src="theme.js?v=20261122a"></script>
+<script src="i18n-id.js?v=20261122a"></script>
+<script src="i18n.js?v=20261122a"></script>
+</head>
+<body class="pg">
+<header class="bar">
+  <a class="brand" href="./" aria-label="Shadow Ball home"><span class="mark" aria-hidden="true"></span><span class="word" data-no-i18n>Shadow<b>Ball</b></span></a>
+  <div class="match">Tactics board · LaLiga <span id="season"></span></div>
+  <nav class="pg-nav">
+    <a class="ghost navlink" href="replay.html">Match replay</a>
+    <button type="button" class="ghost lang-toggle" data-lang-toggle>EN</button>
+    <button type="button" class="ghost theme-toggle" data-theme-toggle>Auto</button>
+  </nav>
+</header>
+
+<main class="pg-grid">
+  <!-- teams -->
+  <aside class="pg-teams panel">
+    <div class="seg pg-side" role="tablist" aria-label="Team">
+      <button type="button" class="on" data-side="H" id="tabUs">Your team</button><button type="button" data-side="A" id="tabThem">Opponent</button>
+    </div>
+    <label class="field">Club
+      <select id="club"></select>
+    </label>
+    <div class="pg-row">
+      <label class="field">Formation
+        <select id="formation"></select>
+      </label>
+      <label class="field">Kit
+        <select id="kit"><option value="0">Home colours</option><option value="1">Second colours</option></select>
+      </label>
+    </div>
+    <div class="pg-xi-head"><h2>Starting XI</h2><button type="button" class="ghost small" id="autoXi">Pick for me</button></div>
+    <div class="pg-xi" id="xi"></div>
+    <p class="note" id="clubSource"></p>
+  </aside>
+
+  <!-- pitch -->
+  <section class="pg-stage">
+    <div class="pg-scen" id="scenarios" role="group" aria-label="Scenario"></div>
+    <p class="pg-scen-text" id="scenText"></p>
+    <div class="pitch-holder pg-pitch">
+      <canvas id="pitch" aria-label="Tactics board: drag players and the ball"></canvas>
+      <div class="layers">
+        <button type="button" class="chip on" data-layer="space"><span class="sw"></span>Dangerous space</button>
+        <button type="button" class="chip on" data-layer="moves"><span class="sw"></span>Best moves</button>
+        <button type="button" class="chip on" data-layer="names"><span class="sw"></span>Names</button>
+      </div>
+      <div class="dir" id="dir">Your team attacking →</div>
+    </div>
+    <div class="pg-tools">
+      <button type="button" class="primary accent" id="simBtn">Simulate best unit move</button>
+      <button type="button" class="ghost" id="swapBtn">Give the ball to the other team</button>
+      <button type="button" class="ghost" id="resetBtn">Reset positions</button>
+      <span class="note pg-hint">Drag any player or the ball. Click a player to change his pace.</span>
+    </div>
+  </section>
+
+  <!-- results -->
+  <aside class="pg-side-col">
+    <section class="card pg-kpis">
+      <header><h2>Model</h2><span class="tag atk" id="phase">—</span></header>
+      <div class="pg-kpi-row">
+        <div class="pg-kpi"><span id="k1Label">Space owned</span><b id="k1">—</b><em id="k1Sub"></em></div>
+        <div class="pg-kpi"><span id="k2Label">Rest defence</span><b id="k2">—</b><em id="k2Sub"></em></div>
+      </div>
+      <div class="pg-meter" aria-hidden="true"><i id="meterH"></i></div>
+      <p class="note" id="kpiNote"></p>
+    </section>
+    <section class="card">
+      <header><h2>Best moves now</h2><span class="note" id="movesSum"></span></header>
+      <ol class="pg-moves" id="moves"></ol>
+      <div class="pg-sim" id="simResult" hidden></div>
+    </section>
+    <section class="card" id="playerCard" hidden>
+      <header><h2>Player</h2><button type="button" class="ghost small" id="closePlayer">Close</button></header>
+      <div class="pg-player">
+        <span class="av team" id="pAv"></span>
+        <div><b id="pName"></b><span id="pRole"></span></div>
+      </div>
+      <label class="field">Pace in the model <output id="paceOut">1.00×</output>
+        <input type="range" id="pace" min="0.85" max="1.15" step="0.01" value="1">
+      </label>
+      <p class="note">Pace scales his top speed in the pitch-control model (1.00× = 5 m/s). Squads list no speeds, so every player starts at 1.00×.</p>
+    </section>
+    <section class="card pg-about">
+      <h2>How to read it</h2>
+      <p class="note"><b>Dangerous space</b> is pitch control (who gets to each spot first) weighted by how often the ball reaches the box from there, learned from three open Metrica games. With the ball: the share you own, and <b>rest defence</b>, the share you would still hold if you lost it now. Without it: <b>space denied</b>, your share of the space they attack.</p>
+      <p class="note">The model has no offside, pressing or passing-lane value, so defensive suggestions lean towards dropping deeper. Validated on four matches: higher space denied came before fewer final-third entries.</p>
+    </section>
+  </aside>
+</main>
+<footer class="source">Squads: each club's published list or its Wikipedia squad table, 2026/27 (source and date per club in the team panel). No club logos or player photos. Threat model: Metrica Sports open sample data. Shadow Ball by <a href="https://github.com/Epinnn14">epinnn</a>.</footer>
+
+<script src="data.js?v=20261122a"></script>
+<script src="laliga.js?v=20261122a"></script>
+<script src="threat.js?v=20261122a"></script>
+<script src="model.js?v=20261122a"></script>
+<script src="pitch.js?v=20261122a"></script>
+<script src="playground.js?v=20261122a"></script>
+</body>
+</html>

@@ -13,7 +13,7 @@ import pandas as pd
 
 from . import paths
 
-EXPORT_DIR = os.path.join(paths.REPO, "exports")
+EXPORT_DIR = paths.EXPORTS_DIR
 
 
 def export(labels, ball, sigma, source):

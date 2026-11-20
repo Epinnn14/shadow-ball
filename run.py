@@ -1,5 +1,7 @@
 """Shadow Ball, Phase 1 pipeline. One entry point, so the submission is one command away.
 
+    python run.py --game METRICA-1 cache   # any command on an open Metrica sample game instead
+
     python run.py cache                 # parse the raw ATD once -> cache/tactical_atd.npz
     python run.py check                 # sanity checks on the data (counts, ball visibility)
     python run.py baseline --window 50  # v0: reproduce the organisers' baseline
@@ -29,6 +31,13 @@ import sys
 import time
 
 import numpy as np
+
+# `--game METRICA-1` (anywhere on the command line) picks the match before any module loads:
+# several modules derive constants from its pitch size. Default: the competition match.
+if "--game" in sys.argv:
+    _i = sys.argv.index("--game")
+    os.environ["SB_GAME"] = sys.argv[_i + 1]
+    del sys.argv[_i:_i + 2]
 
 from sb import atd, baseline, paths, submission, v1, v2, v3, v4
 
@@ -214,14 +223,14 @@ def cmd_tactics(args):
     import pandas as pd
     from sb import tactics
     pos_path = os.path.join(paths.SUBMISSIONS_DIR, "v4_restart.csv")
-    mv_path = os.path.join(paths.REPO, "exports", "movement.parquet")
+    mv_path = os.path.join(paths.EXPORTS_DIR, "movement.parquet")
     if not (os.path.isfile(pos_path) and os.path.isfile(mv_path)):
         sys.exit("Run python run.py v4 and python run.py roles first.")
     labels = pd.read_csv(pos_path)["label"].to_numpy()
     ball = np.load(os.path.join(paths.CACHE_DIR, "ball_reconstructed.npz"))["ball"]
     track = atd.Tracking()
     t0 = time.time()
-    valid = tactics.assigned_slots(pd.read_parquet(os.path.join(paths.REPO, "exports", "roles.parquet"),
+    valid = tactics.assigned_slots(pd.read_parquet(os.path.join(paths.EXPORTS_DIR, "roles.parquet"),
                                                    columns=["frame", "slot"]), *track.xy.shape[:2])
     trans, maps = tactics.transitions(track, labels, ball, valid)
     summary = tactics.transition_summary(trans)
@@ -252,7 +261,7 @@ def cmd_offball(args):
     import pandas as pd
     from sb import offball, roles as roles_mod
     from sb.tactics import filled_labels
-    exp = os.path.join(paths.REPO, "exports")
+    exp = paths.EXPORTS_DIR
     labels = pd.read_csv(os.path.join(paths.SUBMISSIONS_DIR, "v4_restart.csv"))["label"].to_numpy()
     ball = np.load(os.path.join(paths.CACHE_DIR, "ball_reconstructed.npz"))["ball"]
     track = atd.Tracking()
@@ -292,7 +301,7 @@ def cmd_demo(args):
     import os
     import pandas as pd
     from sb import demo
-    exp = os.path.join(paths.REPO, "exports")
+    exp = paths.EXPORTS_DIR
     pos_path = os.path.join(paths.SUBMISSIONS_DIR, "v4_restart.csv")
     if not all(os.path.isfile(os.path.join(exp, f)) for f in ("roles.parquet", "shape.parquet")):
         sys.exit("Run python run.py v4, roles and tactics first.")
@@ -316,15 +325,15 @@ def cmd_serve(args):
     import os
     import socket
     root = os.path.join(paths.REPO, "demo")
-    clip = os.path.join(paths.REPO, "exports", "demo", "clip.json")
+    clip = os.path.join(paths.EXPORTS_DIR, "demo", "clip.json")
     if not os.path.isfile(clip):
         sys.exit("No demo clip yet. Run: python run.py demo")
 
     import json
     state = {"frame": None, "playing": False, "speed": 1, "t": time.time()}
-    lineup_path = os.path.join(paths.REPO, "exports", "demo", "lineup.json")   # local only, gitignored
-    players_path = os.path.join(paths.REPO, "exports", "demo", "players.json")
-    decisions_path = os.path.join(paths.REPO, "exports", "demo", "decisions.json")
+    lineup_path = os.path.join(paths.EXPORTS_DIR, "demo", "lineup.json")   # local only, gitignored
+    players_path = os.path.join(paths.EXPORTS_DIR, "demo", "players.json")
+    decisions_path = os.path.join(paths.EXPORTS_DIR, "demo", "decisions.json")
     snapshot = {"snapshot": None}
     MAX_LINEUP = 4 * 1024 * 1024                  # names + small photos chosen by the coach
 
@@ -415,9 +424,9 @@ def cmd_serve(args):
         ip = "127.0.0.1"
     server = http.server.ThreadingHTTPServer(("0.0.0.0", args.port),
                                              functools.partial(Handler, directory=root))
-    print("Shadow Ball demo")
-    print("  laptop : http://localhost:{}".format(args.port))
-    print("  phone  : http://{}:{}  (same Wi-Fi / hotspot; allow Python on 'Private' networks in the firewall)".format(ip, args.port))
+    print("Shadow Ball")
+    print("  laptop : http://localhost:{}/replay.html   (home: http://localhost:{}/)".format(args.port, args.port))
+    print("  phone  : http://{}:{}/replay.html  (same Wi-Fi / hotspot; allow Python on 'Private' networks in the firewall)".format(ip, args.port))
     print("Ctrl+C to stop. The data is served from this laptop only and never uploaded.")
     try:
         server.serve_forever()
@@ -428,10 +437,20 @@ def cmd_serve(args):
 def compare_reference(labels):
     """v0 with window 50 must match the organisers' published baseline on graded frames."""
     import pandas as pd
+    if paths.OPEN_DATA:
+        return                                    # the organisers' baseline exists for BAR-ATH only
     ref = pd.read_csv(paths.EVAL_DIR + "/reference_baseline_smooth50.csv")["label"].to_numpy()
     graded = paths.graded_mask()
     agree = np.mean(ref[graded] == np.asarray(labels)[graded])
     print("agreement with reference baseline_smooth50 on graded frames: {:.4%}".format(agree))
+
+
+def cmd_reference(args):
+    from sb import reference
+    path = reference.build()
+    labels = __import__("pandas").read_csv(path)["label"].to_numpy()
+    print("wrote {}".format(path))
+    print(submission.summary(labels))
 
 
 def cmd_score(args):
@@ -443,11 +462,43 @@ def cmd_validate(args):
     sys.exit(0 if submission.validate(args.file) else 1)
 
 
+def cmd_video(args):
+    """Your own match video -> tracking cache for the whole pipeline (see sb/video.py)."""
+    import json
+    import os
+    from sb import video
+    if args.action == "frame":
+        out, shape = video.save_frame(args.file, args.at, os.path.join(paths.REPO, "cache", "video-frames"))
+        print("still -> {} ({}x{} px)".format(out, shape[1], shape[0]))
+        print("next: open demo/calibrate.html, load this still, click 4+ landmarks, save calib.json")
+        return
+    if not args.calib:
+        sys.exit("--calib calib.json is needed (python run.py video frame FILE first)")
+    with open(args.calib, encoding="utf-8") as handle:
+        calib = json.load(handle)
+    start = args.start if args.start is not None else float(calib.get("at_s", 0.0))
+    if args.camera == "moving" and abs(start - float(calib.get("at_s", start))) > 0.05:
+        print("note: with a moving camera the calibration still must be the first frame tracked; using --start", calib.get("at_s"))
+        start = float(calib.get("at_s"))
+    pitch = tuple(float(v) for v in args.pitch.lower().split("x"))
+    t0 = time.time()
+    meta = video.track_video(args.file, calib, args.name, detector=args.detector, camera=args.camera, start_s=start,
+                             max_s=args.seconds, pitch=pitch, home=args.home, team_names=(args.home_name, args.away_name),
+                             second_half_s=args.second_half, model=args.model, preview=args.preview)
+    print("{}: {} frames, {} player slots from {} tracks, ball seen {:.0%}, {:.0f}s".format(
+        meta["game"], meta["n_frames"], meta["slots"], meta["tracks"], meta["ball_seen"], time.time() - t0))
+    g = meta["game"]
+    print("next: python run.py --game {g} ball-predict && python run.py --game {g} v4 && python run.py --game {g} roles "
+          "&& python run.py --game {g} tactics && python run.py --game {g} offball && python run.py --game {g} demo --from {a:g} --to {b:g}".format(
+              g=g, a=meta["h2_minute"], b=round(meta["h2_minute"] + min(15.0, meta["n_frames"] / 25 / 60 - meta["h2_minute"]), 2)))
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Shadow Ball Phase 1 pipeline")
+    parser = argparse.ArgumentParser(description="Shadow Ball: football tracking analysis and coaching assistant")
     sub = parser.add_subparsers(dest="cmd", required=True)
     sub.add_parser("cache").set_defaults(func=cmd_cache)
     sub.add_parser("check").set_defaults(func=cmd_check)
+    sub.add_parser("reference", help="open games: possession reference labels from Metrica events").set_defaults(func=cmd_reference)
     p = sub.add_parser("baseline")
     p.add_argument("--window", type=int, default=50)
     p.set_defaults(func=cmd_baseline)
@@ -473,6 +524,24 @@ def main():
     p.add_argument("--from", dest="minute_from", type=float, default=55)
     p.add_argument("--to", dest="minute_to", type=float, default=70)
     p.set_defaults(func=cmd_demo)
+    p = sub.add_parser("video", help="your own match video -> tracking (sb/video.py); never the competition video")
+    p.add_argument("action", choices=["frame", "track"])
+    p.add_argument("file")
+    p.add_argument("--at", type=float, default=10.0, help="frame: second of the still for calibration")
+    p.add_argument("--calib", help="track: calibration JSON from demo/calibrate.html")
+    p.add_argument("--name", default="match")
+    p.add_argument("--detector", choices=["yolo", "blobs"], default="yolo")
+    p.add_argument("--model", default="yolo11n.pt", help="any ultralytics detection model (yolo11s.pt, yolo11m.pt ... are more accurate)")
+    p.add_argument("--camera", choices=["static", "moving"], default="static")
+    p.add_argument("--start", type=float, default=None, help="second to start at (default: the calibration still)")
+    p.add_argument("--seconds", type=float, default=None, help="how much video to track (default: all)")
+    p.add_argument("--second-half", type=float, default=None, help="second in the video where the second half starts")
+    p.add_argument("--pitch", default="105x68")
+    p.add_argument("--home", choices=["left", "right"], default="left", help="side the home team defends at the start")
+    p.add_argument("--home-name", default="Home")
+    p.add_argument("--away-name", default="Away")
+    p.add_argument("--preview", help="write a check video with boxes, track ids and a mini-map")
+    p.set_defaults(func=cmd_video)
     p = sub.add_parser("serve")
     p.add_argument("--port", type=int, default=8000)
     p.set_defaults(func=cmd_serve)

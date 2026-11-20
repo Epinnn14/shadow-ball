@@ -178,3 +178,94 @@ def gap_lengths(track):
 def target_frames(track):
     """Frames with a seen ball and a known period: candidate training targets."""
     return np.where(track.ball_seen & (track.period > 0))[0]
+
+
+# ---------------------------------------------------------------------------------------------
+# open games as a full pipeline input (SB_GAME=METRICA-1..3)
+# ---------------------------------------------------------------------------------------------
+
+def _speed(xy_m, half=5):
+    """m/s from positions over +/- `half` frames (the open data has no speed column)."""
+    prev = np.concatenate([np.repeat(xy_m[:1], half, 0), xy_m[:-half]])
+    nxt = np.concatenate([xy_m[half:], np.repeat(xy_m[-1:], half, 0)])
+    vel = (nxt - prev) / (2 * half / paths.FPS)
+    return np.hypot(vel[..., 0], vel[..., 1]).astype(np.float32)
+
+
+def cache_arrays(game_number, root=None):
+    """The arrays `atd.build_cache` writes, for one open Metrica game: frame_id (1..T),
+    players (T, S, 3) = normalised x, y + speed in m/s, ball (T, 2) normalised, teams (S,), names."""
+    track = load_game(game_number, root)
+    scale = np.array(paths.PITCH, dtype=np.float32)
+    players = np.concatenate([track.xy / scale, _speed(track.xy)[..., None]], axis=-1).astype(np.float32)
+    frame_id = np.arange(1, len(track) + 1, dtype=np.int64)
+    names = ("Home", "Away") if game_number in (1, 2) else ("Team A", "Team B")
+    return frame_id, players, (track.ball / scale).astype(np.float32), track.teams.astype(np.int8), names
+
+
+SET_PIECE_TYPES = {"FREE KICK": "Free Kick", "CORNER KICK": "Corner Kick", "THROW IN": "Throw-in",
+                   "GOAL KICK": "Goal Kick", "KICK OFF": "Kick Off"}
+
+
+def events(game_number, root=None):
+    """Metrica's (human-tagged) event data for an open game, as one table with video frames
+    (frame_id - 1), the team side ('H' home / 'A' away), type, subtype, players and positions
+    in metres. Used for reference labels, set-piece markers and passing networks: never as an
+    input to the possession labels themselves."""
+    import json
+    import pandas as pd
+    root = root or data_dir()
+    game_dir = os.path.join(root, "data", "Sample_Game_{}".format(game_number))
+    scale = np.array(paths.PITCH)
+    if game_number in (1, 2):
+        e = pd.read_csv(os.path.join(game_dir, "Sample_Game_{}_RawEventsData.csv".format(game_number)))
+        out = pd.DataFrame({
+            "side": e["Team"].map({"Home": "H", "Away": "A"}),
+            "type": e["Type"].str.upper(), "subtype": e["Subtype"].fillna("").str.upper(),
+            "period": e["Period"], "start": e["Start Frame"] - 1, "end": e["End Frame"] - 1,
+            "from": e["From"], "to": e["To"],
+            "x0": e["Start X"] * scale[0], "y0": e["Start Y"] * scale[1],
+            "x1": e["End X"] * scale[0], "y1": e["End Y"] * scale[1]})
+    else:
+        meta = ET.parse(os.path.join(game_dir, "Sample_Game_{}_metadata.xml".format(game_number))).getroot()
+        home = next(t.get("id") for t in meta.iter("Team"))
+        rows = []
+        with open(os.path.join(game_dir, "Sample_Game_{}_events.json".format(game_number))) as handle:
+            for ev in json.load(handle)["data"]:
+                sub = ev.get("subtypes")
+                if isinstance(sub, list):
+                    sub = " ".join(s["name"] for s in sub)
+                elif isinstance(sub, dict):
+                    sub = sub.get("name", "")
+                st, en = ev["start"], ev["end"]
+                rows.append({
+                    "side": "H" if ev["team"]["id"] == home else "A",
+                    "type": ev["type"]["name"].upper(), "subtype": (sub or "").upper(),
+                    "period": ev["period"], "start": st["frame"] - 1, "end": en["frame"] - 1,
+                    "from": (ev.get("from") or {}).get("name"), "to": (ev.get("to") or {}).get("name"),
+                    "x0": st["x"] * scale[0] if st["x"] is not None else np.nan,
+                    "y0": st["y"] * scale[1] if st["y"] is not None else np.nan,
+                    "x1": en["x"] * scale[0] if en["x"] is not None else np.nan,
+                    "y1": en["y"] * scale[1] if en["y"] is not None else np.nan})
+        out = pd.DataFrame(rows)
+    return out.sort_values("start", kind="stable").reset_index(drop=True)
+
+
+def slot_jerseys(game_number, root=None):
+    """Shirt number of every tracking slot of an open game, in cache order (home first for games 1-2,
+    player-id order for game 3). Unlike the competition's tracklets, these slots are real players."""
+    root = root or data_dir()
+    game_dir = os.path.join(root, "data", "Sample_Game_{}".format(game_number))
+    if game_number in (1, 2):
+        out = []
+        for side in ("Home", "Away"):
+            path = os.path.join(game_dir, "Sample_Game_{}_RawTrackingData_{}_Team.csv".format(game_number, side))
+            with open(path, newline="") as handle:
+                rows = csv.reader(handle)
+                next(rows)
+                numbers = next(rows)
+            out += [int(n) for n in numbers[3:] if n.strip()]
+        return out
+    meta = ET.parse(os.path.join(game_dir, "Sample_Game_{}_metadata.xml".format(game_number))).getroot()
+    shirt = {p.get("id"): int(p.findtext("ShirtNumber")) for p in meta.iter("Player")}
+    return [shirt[pid] for pid in sorted(shirt)]

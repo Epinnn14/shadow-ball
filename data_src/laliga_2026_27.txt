@@ -1,0 +1,493 @@
+## Alavés|Deportivo Alavés|https://en.wikipedia.org/wiki/Deportivo_Alav%C3%A9s|28 June 2026|#1F4E9C|#FFFFFF
+1;GK;Antonio Sivera
+2;DF;Facundo Garcés
+3;DF;Youssef Enríquez
+4;MF;Denis Suárez
+6;MF;Ander Guevara
+7;MF;Ángel Pérez
+8;MF;Antonio Blanco
+9;FW;Mariano Díaz
+10;MF;Carles Aleñá
+11;FW;Toni Martínez
+14;DF;Nahuel Tenaglia
+15;FW;Lucas Boyé
+16;DF;Ville Koski
+17;DF;Jonny Otto
+18;MF;Jon Guridi
+19;MF;Pablo Ibáñez
+21;MF;Abde Rebbach
+23;MF;Carlos Protesoni
+24;DF;Víctor Parada
+26;DF;Álvaro García
+28;MF;Lander Pinillos
+30;DF;Carlos Ballestero
+31;GK;Grégoire Świderski
+32;MF;Izei Hernández
+33;GK;Rubén Montero
+34;FW;Aitor Mañas
+35;DF;Xanet Oláiz
+36;DF;Paco Sanz
+## Athletic|Athletic Club|https://en.wikipedia.org/wiki/Athletic_Bilbao|not stated|#D52B1E|#FFFFFF
+1;GK;Unai Simón
+2;DF;Andoni Gorosabel
+3;DF;Dani Vivian
+4;DF;Aitor Paredes
+5;DF;Yeray Álvarez
+6;MF;Mikel Vesga
+7;FW;Álex Berenguer
+8;MF;Oihan Sancet
+9;FW;Iñaki Williams
+10;FW;Nico Williams
+11;FW;Gorka Guruzeta
+12;DF;Jesús Areso
+13;DF;Unai Egiluz
+14;DF;Aymeric Laporte
+16;MF;Iñigo Ruiz de Galarreta
+17;DF;Yuri Berchiche
+18;MF;Mikel Jauregizar
+19;DF;Adama Boiro
+20;MF;Unai Gómez
+21;FW;Maroan Sannadi
+22;FW;Nico Serrano
+23;FW;Robert Navarro
+24;MF;Beñat Prados
+25;FW;Urko Izeta
+26;GK;Mikel Santos
+27;GK;Álex Padilla
+28;DF;Aimar Duñabeitia
+30;MF;Alejandro Rego
+31;FW;Asier Hierro
+33;FW;Adrián Pérez
+## Atlético Madrid|Atlético de Madrid|https://en.wikipedia.org/wiki/Atl%C3%A9tico_Madrid|2 September 2026|#CB3524|#1B3A6B
+1;GK;Juan Musso
+3;MF;Obed Vargas
+4;MF;Rodrigo Mendoza
+5;MF;Johnny Cardoso
+6;MF;Koke
+7;MF;Lee Kang-in
+8;MF;Pablo Barrios
+9;FW;Alexander Sørloth
+10;MF;Álex Baena
+11;MF;Ademola Lookman
+13;GK;Jan Oblak
+14;MF;Marcos Llorente
+15;FW;Jonathan David
+16;MF;Arnau Ortiz
+17;DF;Dávid Hancko
+18;DF;Marc Pubill
+19;FW;Julián Alvarez
+20;FW;Giuliano Simeone
+21;DF;Cristian Romero
+22;DF;Alejandro Grimaldo
+23;MF;Morten Hjulmand
+24;DF;Robin Le Normand
+25;GK;Salvi Esquivel
+27;DF;Jorge Domínguez
+29;FW;Miguel Cubo
+30;DF;Dani Martínez
+46;MF;Jorge Castillo
+## Barcelona|FC Barcelona|https://www.fcbarcelona.com/en/news/4564872/the-squad-for-elche|23 August 2026 (matchday squad; numbers not published there)|#A50044|#004D98
+-;GK;Joan Garcia
+-;GK;Wojciech Szczęsny
+-;GK;Eder Aller
+-;DF;João Cancelo
+-;DF;Pau Cubarsí
+-;DF;Andreas Christensen
+-;DF;Gerard Martín
+-;DF;Jules Koundé
+-;DF;Eric García
+-;DF;Álvaro Cortés
+-;DF;Xavi Espart
+-;MF;Pesquer
+-;MF;Gavi
+-;MF;Fermín López
+-;MF;Pedri
+-;MF;Dani Olmo
+-;MF;Marc Bernal
+-;FW;Brian Fariñas
+-;FW;Lamine Yamal
+-;FW;Raphinha
+-;FW;Karim Adeyemi
+-;FW;Anthony Gordon
+-;FW;Hamza Abdelkarim
+## Betis|Real Betis|https://en.wikipedia.org/wiki/Real_Betis|1 September 2026|#00954C|#FFFFFF
+1;GK;Álvaro Valles
+2;DF;Héctor Bellerín
+3;DF;Diego Llorente
+4;DF;Natan
+5;DF;Marc Bartra
+6;MF;Facundo Bernal
+7;FW;Antony
+8;MF;Pablo Fornals
+9;FW;Cucho Hernández
+10;FW;Abde Ezzalzouli
+11;DF;Fran García
+12;DF;Ángel Ortiz
+13;GK;Diego Conde
+14;FW;Iker Losada
+15;MF;Álvaro Fidalgo
+16;DF;Valentín Gómez
+17;MF;Rodrigo Riquelme
+18;MF;Nelson Deossa
+19;FW;Troy Parrott
+20;MF;Giovanni Lo Celso
+21;MF;Marc Roca
+22;MF;Isco
+23;DF;Junior Firpo
+24;FW;Aitor Ruibal
+25;MF;Dani Ceballos
+27;FW;José Antonio Morante
+31;GK;Manu González
+## Celta|Celta de Vigo|https://en.wikipedia.org/wiki/RC_Celta_de_Vigo|1 September 2026|#8AC3EE|#E4002B
+1;GK;Altay Bayındır
+2;DF;Carl Starfelt
+3;DF;Marcos Alonso
+4;DF;Abdoulaye Faye
+5;DF;Sergio Carreira
+6;MF;Ilaix Moriba
+7;FW;Borja Iglesias
+8;MF;Miguel Román
+9;FW;Ferran Jutglà
+10;FW;Iago Aspas
+11;FW;Pablo Durán
+13;GK;Ionuț Radu
+14;MF;Aleix Febas
+15;DF;Álvaro Núñez
+16;FW;Hugo González
+17;DF;Javi Rueda
+18;DF;Yoel Lago
+19;FW;Williot Swedberg
+20;DF;Javi Rodríguez
+21;DF;Sebastián Cáceres
+22;DF;Javi Galán
+23;FW;Hugo Álvarez
+24;FW;Couhaib Driouech
+25;GK;Iván Villar
+27;DF;Quique Ribes
+28;MF;Andrés Antañón
+## Deportivo|Deportivo de La Coruña|https://en.wikipedia.org/wiki/Deportivo_de_A_Coru%C3%B1a|5 September 2025 (page date; may be out of date)|#1A5FB4|#FFFFFF
+1;GK;Germán Parreño
+2;DF;Adrià Altimira
+3;DF;Arnau Comas
+4;DF;Lucas Noubi
+5;DF;Dani Barcia
+7;FW;Pierre-Emerick Aubameyang
+8;MF;Diego Villares
+9;FW;Zakaria Eddahchouri
+10;FW;Yeremay Hernández
+11;FW;David Mella
+12;DF;Giacomo Quagliata
+13;GK;Leo Román
+14;MF;Riki Rodríguez
+15;DF;Miguel Loureiro
+16;MF;Lorenzo Amatucci
+18;MF;Jonathan Asp Jensen
+19;FW;Luismi Cruz
+21;MF;Mario Soriano
+22;DF;Bright Ede
+23;DF;Ximo Navarro
+24;FW;Adama Traoré
+25;GK;Álvaro Fernández
+## Elche|Elche CF|https://en.wikipedia.org/wiki/Elche_CF|18 August 2025 (page date; may be out of date)|#0B7A3E|#FFFFFF
+1;GK;Matías Dituro
+2;DF;Buba Sangaré
+4;DF;Bambo Diaby
+5;MF;Federico Redondo
+6;DF;Pedro Bigas
+7;MF;Yago Santiago
+8;MF;Marc Aguado
+9;FW;Ezequiel Ponce
+11;MF;Germán Valera
+12;MF;Gonzalo Villar
+14;FW;Fer Niño
+16;MF;Martim Neto
+17;MF;Josan
+19;MF;Grady Diangana
+20;FW;Tete Morente
+21;FW;Lucas Cepeda
+22;DF;David Affengruber
+23;DF;Víctor Chust
+24;FW;Abiel Osorio
+26;DF;Matía Barzić
+29;MF;Ali Houary
+43;GK;Alejandro Iturbe
+## Espanyol|RCD Espanyol|https://en.wikipedia.org/wiki/RCD_Espanyol|2 September 2026|#0072CE|#FFFFFF
+1;GK;Ángel Fortuño
+4;MF;Urko González de Zárate
+5;DF;Clemens Riedel
+6;DF;Leandro Cabrera
+7;FW;Javi Puado
+8;MF;Edu Expósito
+9;FW;Roberto Fernández
+10;MF;Pol Lozano
+11;FW;Pere Milla
+13;GK;Marko Dmitrović
+17;FW;Jofre Carreras
+18;FW;Marcos Fernández
+19;FW;Kike García
+21;DF;Roger Hinojo
+22;MF;Álex Calatrava
+23;DF;Omar El Hilali
+24;FW;Tyrhys Dolan
+26;MF;Rafel Bauzà
+27;DF;Adama Timera
+28;FW;Javi Hernández
+31;GK;Llorenç Serred
+32;DF;José Ángel López
+## Getafe|Getafe CF|https://en.wikipedia.org/wiki/Getafe_CF|17 August 2025 (page date; may be out of date)|#005999|#FFFFFF
+1;GK;Jiří Letáček
+2;DF;Dakonam Djené
+3;DF;Davinchi
+4;DF;Saba Sazonov
+5;DF;Abdel Abqar
+6;MF;Mario Martín
+7;FW;Juanmi
+8;MF;Nemanja Gudelj
+9;FW;Borja Mayoral
+10;FW;Martín Satriano
+11;MF;Ramon Terrats
+13;GK;David Soria
+14;DF;Dani Carvajal
+15;DF;Sebastián Boselli
+16;MF;Francho Serrano
+17;DF;Kiko Femenía
+18;MF;Christantus Uche
+19;FW;Enes Ünal
+22;DF;Johan Mojica
+24;DF;Zaid Romero
+27;FW;Ebrahima Drammeh
+28;MF;Alberto Risco
+## Levante|Levante UD|https://en.wikipedia.org/wiki/Levante_UD|20 December 2025 (page date; may be out of date)|#004B93|#B4053F
+1;GK;Pablo Campos
+2;DF;Aïssa Mandi
+4;DF;Adrián Dela
+7;FW;Roger Brugué
+8;MF;Jon Ander Olasagasti
+9;FW;Iván Romero
+11;FW;Yanis Musuayi
+13;GK;Mathew Ryan
+14;DF;Jorge Cabello
+17;DF;Víctor García
+18;MF;Enzo Bardeli
+20;MF;Oriol Rey
+21;FW;Karl Etta Eyong
+22;DF;Jeremy Toljan
+27;MF;Paco Cortés
+29;DF;Nacho Pérez
+33;DF;Marc Santos
+34;MF;Manel Usedo
+38;MF;Alberto Calatrava
+## Málaga|Málaga CF|https://en.wikipedia.org/wiki/M%C3%A1laga_CF|24 November 2025 (page date; may be out of date)|#5BA4DB|#FFFFFF
+1;GK;Alfonso Herrero
+3;DF;Carlos Puga
+4;DF;Einar Galilea
+6;MF;Ramón
+7;MF;Haitam
+8;MF;Juanpe
+9;FW;Chupete
+10;MF;David Larrubia
+11;MF;Joaquín Muñoz
+13;GK;Carlos López
+15;DF;Moussa Diarra
+16;DF;Diego Murillo
+17;FW;Eneko Jauregi
+18;DF;Dani Sánchez
+19;MF;Luismi
+21;FW;Adrián Niño
+22;MF;Dani Lorenzo
+23;MF;Izan Merino
+24;MF;Julen Lobete
+31;DF;Rafita
+## Osasuna|CA Osasuna|https://en.wikipedia.org/wiki/CA_Osasuna|14 June 2026|#D91A21|#0A2240
+1;GK;Sergio Herrera
+5;DF;Jorge Herrando
+6;MF;Lucas Torró
+7;MF;Jon Moncayola
+8;MF;Iker Muñoz
+9;FW;Raúl García
+10;MF;Aimar Oroz
+11;FW;Kike Barja
+13;GK;Aitor Fernández
+14;MF;Rubén García
+15;DF;Diego Rico
+16;MF;Moi Gómez
+17;FW;Ante Budimir
+18;FW;Raúl Moro
+19;DF;Valentin Rosier
+20;FW;Romain Del Castillo
+21;MF;Jonathan Dubasin
+22;DF;Enzo Boyomo
+23;DF;Abel Bretones
+24;DF;Alejandro Catena
+## Racing|Racing de Santander|https://en.wikipedia.org/wiki/Racing_de_Santander|11 August 2026|#0B7A3E|#FFFFFF
+1;GK;Simon Eriksson
+2;DF;Álvaro Mantilla
+3;DF;Aarón Martín
+4;DF;Manu Hernando
+5;DF;Pablo Ramón
+6;MF;Íñigo Sainz-Maza
+7;FW;Giorgi Guliashvili
+9;FW;Juan Carlos Arana
+10;MF;Iñigo Vicente
+11;FW;Andrés Martín
+12;FW;Asier Villalibre
+13;GK;Julen Agirrezabala
+14;MF;Maguette Gueye
+15;FW;Pablo García
+16;DF;Facundo González
+17;DF;Jorge Salinas
+19;FW;Iker Luque
+20;MF;Sergio Canales
+22;DF;Pedro Felipe
+23;MF;Iván Martín
+30;DF;Carlos Sánchez
+## Rayo|Rayo Vallecano|https://en.wikipedia.org/wiki/Rayo_Vallecano|September 2022 (stamp on page; list may be out of date)|#FFFFFF|#E30613
+1;GK;Dani Cárdenas
+2;DF;Andrei Rațiu
+3;DF;Pep Chavarría
+4;MF;Pedro Díaz
+6;MF;Pathé Ciss
+7;MF;Isi Palazón
+8;MF;Óscar Trejo
+9;FW;Alemão
+10;FW;Sergio Camello
+11;FW;Randy Nteka
+13;GK;Augusto Batalla
+17;MF;Unai López
+18;MF;Álvaro García
+19;FW;Jorge de Frutos
+20;DF;Iván Balliu
+21;FW;Fran Pérez
+23;MF;Óscar Valentín
+24;DF;Florian Lejeune
+26;DF;Marco de las Sías
+27;DF;Sergio Lozano
+29;MF;Diego Méndez
+## Real Madrid|Real Madrid CF|https://www.realmadrid.com/en-US/news/football/first-team/latest-news/dorsales-del-real-madrid-para-la-temporada-2026-27-10-08-2026|10 August 2026|#F5F5F5|#2B2E83
+1;GK;Thibaut Courtois
+13;GK;Andriy Lunin
+2;DF;Raúl Asencio
+3;DF;Éder Militão
+4;DF;Dean Huijsen
+12;DF;Trent Alexander-Arnold
+16;DF;Ibrahima Konaté
+17;DF;Marc Cucurella
+18;DF;Álvaro Carreras
+22;DF;Antonio Rüdiger
+23;DF;Ferland Mendy
+24;DF;Denzel Dumfries
+5;MF;Jude Bellingham
+6;MF;Eduardo Camavinga
+8;MF;Federico Valverde
+14;MF;Aurélien Tchouaméni
+15;MF;Arda Güler
+20;MF;Bernardo Silva
+27;MF;Thiago
+7;FW;Vinícius Júnior
+9;FW;Endrick
+10;FW;Kylian Mbappé
+11;FW;Rodrygo
+19;FW;C. Espí
+21;FW;Brahim Díaz
+25;FW;Yan Diomande
+## Real Sociedad|Real Sociedad|https://en.wikipedia.org/wiki/Real_Sociedad|1 September 2026|#0067B1|#FFFFFF
+1;GK;Álex Remiro
+2;DF;Jon Aramburu
+3;DF;Aihen Muñoz
+4;MF;Jon Gorrotxategi
+5;DF;Igor Zubeldia
+6;DF;Jon Martín
+7;FW;Ander Barrenetxea
+8;MF;Beñat Turrientes
+9;FW;Orri Óskarsson
+10;FW;Mikel Oyarzabal
+11;FW;Gonçalo Guedes
+12;FW;Job Ochieng
+13;GK;Unai Marrero
+14;MF;Takefusa Kubo
+15;MF;Pablo Marín
+16;DF;Jon Pacheco
+17;MF;Sergio Gómez
+18;MF;Carlos Soler
+19;DF;Mamadou Sarr
+20;DF;Álvaro Odriozola
+21;MF;Yangel Herrera
+22;DF;Héctor Fort
+23;MF;Arsen Zakharyan
+24;MF;Luka Sučić
+## Sevilla|Sevilla FC|https://en.wikipedia.org/wiki/Sevilla_FC|2 September 2026|#FFFFFF|#D4001F
+1;GK;Odysseas Vlachodimos
+2;DF;Juan Iglesias
+3;DF;Julio Díaz
+4;DF;Kike Salas
+5;DF;Andrés Castrín
+6;MF;Lucien Agoumé
+7;FW;Alfon González
+8;MF;Giorgi Kochorashvili
+9;FW;Robbie Ure
+10;MF;Peque Fernández
+11;FW;Rubén Vargas
+12;DF;Arouna Sangante
+13;GK;Fran González
+14;MF;Manu Bueno
+15;DF;Fábio Cardoso
+16;FW;Isaac Romero
+17;DF;Gabriel Suazo
+18;MF;Jon Guridi
+19;FW;Lucas Stassin
+20;FW;Félix Correia
+21;FW;Chidera Ejuke
+22;DF;José Ángel Carmona
+23;DF;Marcão
+24;MF;Youssouf Fofana
+## Valencia|Valencia CF|https://en.wikipedia.org/wiki/Valencia_CF|2 September 2026|#FFFFFF|#F18E00
+1;GK;Stole Dimitrievski
+2;MF;Guido Rodríguez
+3;DF;José Copete
+4;DF;Mouctar Diakhaby
+5;DF;César Tárrega
+6;FW;Umar Sadiq
+7;FW;Arnaut Danjuma
+8;MF;Javi Guerra
+9;FW;Hugo Duro
+10;FW;Harvey Elliott
+11;FW;Luis Rioja
+12;DF;Justin de Haas
+13;GK;Cristian Rivero
+14;DF;José Gayà
+15;MF;Aliou Dieng
+16;FW;Diego López
+17;MF;Sergi Canós
+18;MF;Pepelu
+19;FW;Dani Raba
+20;DF;Dimitri Foulquier
+21;DF;Jesús Vázquez
+22;DF;Arnau Martínez
+23;MF;Filip Ugrinić
+24;DF;Pablo Maffeo
+25;GK;Kayne van Oevelen
+## Villarreal|Villarreal CF|https://en.wikipedia.org/wiki/Villarreal_CF|1 September 2026|#FFE667|#005187
+1;GK;Luiz Júnior
+2;DF;Logan Costa
+3;DF;Alex Freeman
+5;MF;Alassane Diatta
+6;DF;Pau Navarro
+7;FW;Gerard Moreno
+8;DF;Juan Foyth
+9;FW;Georges Mikautadze
+10;MF;Alberto Moleiro
+11;FW;Ilias Akhomach
+12;DF;Renato Veiga
+13;GK;Rubén Gómez
+14;MF;Santi Comesaña
+15;DF;Santiago Mouriño
+16;MF;Carlos Maciá
+17;MF;Tajon Buchanan
+18;MF;Pape Gueye
+19;FW;Nicolas Pépé
+20;DF;Carlos Romero
+21;FW;Tani Oluwaseyi
+22;FW;Ayoze Pérez
+23;DF;Sergi Cardona
+24;MF;Nathan Saliba
+25;GK;Péter Gulácsi

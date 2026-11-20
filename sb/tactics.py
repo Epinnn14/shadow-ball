@@ -159,7 +159,7 @@ def transitions(track, labels, ball, valid):
         own, d_opp = ownership(w_now, l_now, grid)
         row = {
             "frame": int(t), "half": half,
-            "minute": round(float((t - paths.HALVES[half - 1][0]) / FPS / 60 + (0 if half == 1 else 45)), 2),
+            "minute": round(float((t - paths.HALVES[half - 1][0]) / FPS / 60 + (0 if half == 1 else paths.H2)), 2),
             "won_by": "H" if winner == 0 else "A",
             "ball_x": round(float(b0[0]), 1), "ball_y": round(float(b0[1]), 1),
             "zone": zone(b0[0]),
@@ -249,7 +249,7 @@ def shape(track, labels, valid):
             l = lab[frames]
             phase = np.where(l == side, "in possession", np.where(l == "D", "dead", "out of possession"))
             df = pd.DataFrame({"frame": frames, "team": side, "half": half,
-                               "minute": (frames - paths.HALVES[half - 1][0]) / FPS / 60 + (0 if half == 1 else 45),
+                               "minute": (frames - paths.HALVES[half - 1][0]) / FPS / 60 + (0 if half == 1 else paths.H2),
                                "phase": phase, **s})
             rows.append(df)
     return pd.concat(rows, ignore_index=True)
@@ -266,7 +266,7 @@ def shape_alerts(df):
     oop = df[df.phase == "out of possession"].copy()
     oop["block"] = (oop.minute // 5 * 5).astype(int)
     for (team, half), g in oop.groupby(["team", "half"]):
-        start = 0 if half == 1 else 45
+        start = 0 if half == 1 else paths.H2
         ref = g[g.minute < start + 15][["line_height_m", "compactness_m", "width_m"]].median()
         refs["{}_half{}".format(team, half)] = {k: round(float(v), 1) for k, v in ref.items()}
         for block, b in g.groupby("block"):
@@ -305,7 +305,7 @@ def stamina(movement):
     for (team, label), g in mv.groupby(["team", "label"]):
         g = g.sort_values(["half", "minute_from"])
         first_half = g.half.min()
-        start = 0 if first_half == 1 else 45
+        start = 0 if first_half == 1 else paths.H2
         base = g[(g.half == first_half) & (g.minute_from < start + 15) & ok.loc[g.index]]
         if base.empty:
             continue
@@ -341,7 +341,7 @@ def stamina(movement):
 # ---------------------------------------------------------------- save
 
 def save(trans, maps, summary, shp, alerts, stam):
-    out = os.path.join(paths.REPO, "exports")
+    out = paths.EXPORTS_DIR
     os.makedirs(out, exist_ok=True)
     trans.to_parquet(os.path.join(out, "transitions.parquet"), index=False)
     _, (nx, ny) = pitch_grid()

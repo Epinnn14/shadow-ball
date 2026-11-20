@@ -1,0 +1,6 @@
+# Only for `python run.py video ...` (your own match videos). The possession pipeline and the
+# submission do not need these. Install after requirements.txt:
+#   pip install -r requirements-video.txt
+# A CUDA build of PyTorch (pytorch.org) makes YOLO about 10x faster than the CPU build.
+opencv-python==5.0.0.93
+ultralytics==8.4.216

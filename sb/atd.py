@@ -76,6 +76,16 @@ def cache_path(source="tactical"):
 
 def build_cache(source="tactical"):
     """Parse the raw ATD for one source and write cache/<source>_atd.npz."""
+    if paths.VIDEO:
+        raise SystemExit("Video games are cached by `python run.py video track`; nothing to parse.")
+    if paths.OPEN_DATA:
+        from . import external
+        frame_id, players, ball, teams, names = external.cache_arrays(int(paths.GAME[-1]))
+        check_alignment(frame_id, source)
+        os.makedirs(paths.CACHE_DIR, exist_ok=True)
+        out = cache_path(source)
+        np.savez(out, frame_id=frame_id, players=players, ball=ball, teams=teams, team_names=np.array(names))
+        return out
     meta = paths.asset("atd_meta", source)
     raw = paths.asset("atd_raw", source)
     teams = slot_teams(meta)

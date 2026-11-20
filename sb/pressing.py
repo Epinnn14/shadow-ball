@@ -108,7 +108,7 @@ def band_table(df):
 
 
 def save(df, zones, bands):
-    out = os.path.join(paths.REPO, "exports")
+    out = paths.EXPORTS_DIR
     os.makedirs(out, exist_ok=True)
     df.to_parquet(os.path.join(out, "pressing.parquet"), index=False)
     with open(os.path.join(out, "pressing_summary.json"), "w") as handle:

@@ -36,27 +36,29 @@ import pandas as pd
 from . import movement, paths, roles as roles_mod
 
 SAMPLE = 5                      # 25 fps / 5 = 5 samples per second
-OUT_DIR = os.path.join(paths.REPO, "exports", "demo")
+OUT_DIR = os.path.join(paths.EXPORTS_DIR, "demo")
 
 
 def match_minute(frame):
+    if len(paths.HALVES) == 1:
+        return (frame - paths.HALVES[0][0]) / paths.FPS / 60
     half = 1 if frame <= paths.HALVES[0][1] else 2
     start = paths.HALVES[half - 1][0]
-    return (frame - start) / paths.FPS / 60 + (0 if half == 1 else 45)
+    return (frame - start) / paths.FPS / 60 + (0 if half == 1 else paths.H2)
 
 
 def frame_at(minute):
-    """First video frame of a match minute (45+ = second half)."""
-    if minute < 45:
+    """First video frame of a match minute (45+ = second half; a one-part video counts on)."""
+    if minute < paths.H2 or len(paths.HALVES) == 1:
         return int(paths.HALVES[0][0] + minute * 60 * paths.FPS)
-    return int(paths.HALVES[1][0] + (minute - 45) * 60 * paths.FPS)
+    return int(paths.HALVES[1][0] + (minute - paths.H2) * 60 * paths.FPS)
 
 
 def block_end(half, minute_from, block=5):
     """Frame at which a 5-min block that started at `minute_from` (match minutes) of `half` ends:
     the moment its numbers are known. Half 1 can run past 45' (stoppage time)."""
     start, end = paths.HALVES[half - 1]
-    offset = minute_from + block - (0 if half == 1 else 45)
+    offset = minute_from + block - (0 if half == 1 else paths.H2)
     return int(min(start + offset * 60 * paths.FPS, end))
 
 
@@ -118,9 +120,20 @@ def build(track, labels, ball, sigma, source, role_df, tactics_dir, minute_from=
                 if h > half:
                     break
                 a, b_ = paths.HALVES[h - 1]
-                if not ((role_df.team == team) & (role_df.half == h) & (role_df.label == label)).any():
+                if h < half and paths.ANONYMOUS:
+                    # open games: a slot is one real player, so earlier halves count HIS running,
+                    # whatever position he played then (role labels can differ between halves)
+                    now = role_df[(role_df.team == team) & (role_df.half == half) & (role_df.label == label)
+                                  & (role_df.frame <= first)]                 # who held it before the clip
+                    if now.empty:
+                        continue
+                    slot = int(now.slot.mode().iloc[0])
+                    speed = track.speed[a:b_ + 1, slot].astype(np.float32)
+                    speed[speed > movement.MAX_SPEED] = np.nan
+                elif not ((role_df.team == team) & (role_df.half == h) & (role_df.label == label)).any():
                     continue
-                speed, _ = movement.role_series(role_df, track, team, h, label)
+                else:
+                    speed, _ = movement.role_series(role_df, track, team, h, label)
                 d, hs, spr, top = cumulative_role_stats(speed)
                 if h < half:
                     totals[:, 0] += d[-1]
@@ -183,7 +196,7 @@ def build(track, labels, ball, sigma, source, role_df, tactics_dir, minute_from=
     stam_rows = [{"team": r.team, "label": r.label, "half": int(r.half), "minute": int(r.minute_from),
                   "risk": None if pd.isna(r.risk) else int(r.risk), "level": r.level,
                   "hsr": float(r.hsr_vs_start), "dist": float(r.dist_vs_start)}
-                 for r in stam.itertuples()]
+                 for r in stam.itertuples() if r.label != "GK"]   # a keeper's running says nothing about fatigue
     with open(os.path.join(tactics_dir, "shape_alerts.json")) as handle:
         alerts = json.load(handle)
 
@@ -223,12 +236,16 @@ def build(track, labels, ball, sigma, source, role_df, tactics_dir, minute_from=
 
     with open(os.path.join(tactics_dir, "formations.json")) as handle:
         formations = json.load(handle)
+    open_squad = open_game_squad(track, role_df, half, first, last) if paths.ANONYMOUS else None
+    phase2_block = build_phase2(track, lab, ball, sides, surface, entries, tactics_dir, half, first, last, role_df,
+                                {side: _role_means(formations["{}_half{}".format(track.team_names[t], half)])
+                                 for t, side in ((0, "H"), (1, "A"))})
     return {
         "meta": {"teams": {"H": track.team_names[0], "A": track.team_names[1]},
                  "formation": {"H": formations["{}_half{}".format(track.team_names[0], half)]["formation"],
                                "A": formations["{}_half{}".format(track.team_names[1], half)]["formation"]},
                  "labels": names, "sample_fps": paths.FPS // SAMPLE, "fps": paths.FPS,
-                 "half": half, "half_start": paths.HALVES[half - 1][0],
+                 "half": half, "half_start": paths.HALVES[half - 1][0], "h2_minute": paths.H2,
                  "first": first, "last": last, "minute_from": minute_from, "minute_to": minute_to,
                  "pitch": list(paths.PITCH),
                  "model": "v4.1 possession (HMM + ballnet ball) / roles / tactics",
@@ -238,13 +255,75 @@ def build(track, labels, ball, sigma, source, role_df, tactics_dir, minute_from=
                  # The demo's fatigue map and line-up matching use this shape.
                  "role_means": {side: _role_means(formations["{}_half{}".format(track.team_names[t], half)])
                                 for t, side in ((0, "H"), (1, "A"))},
-                 "attacks_right": {side: bool(sides[(t, half)]) for t, side in ((0, "H"), (1, "A"))}},
+                 "attacks_right": {side: bool(sides[(t, half)]) for t, side in ((0, "H"), (1, "A"))},
+                 # open games: anonymous players ("Player 9"), so no real names are ever shown
+                 "open_data": bool(paths.ANONYMOUS), "squad": open_squad,
+                 "source": "Metrica Sports sample data (github.com/metrica-sports/sample-data)" if paths.OPEN_DATA
+                 else ("tracking from your video ({}) by Shadow Ball's video pipeline".format(
+                     paths.GAMES[paths.GAME]["video"].get("file", "video")) if paths.VIDEO else None)},
         "frames": frames, "seconds": {"frames": secs.tolist(), "movement": cum, "shape": shape},
         "timeline": timeline, "events": events, "stamina": stam_rows, "transitions": tr_rows,
         "momentum": momentum, "entries": entries, "setpieces": setpieces,
         "match_events": events_st, "runs": runs, "team_running": running, "shadow": shadow,
         "pressing": press_rows, "leak": leak_rows, "ratings": ratings, "rating_ref": rating_ref,
+        "phase2": phase2_block,
     }
+
+
+def build_phase2(track, lab, ball, sides, surface, entries, tactics_dir, half, first, last, role_df, role_means):
+    """Half-time screen (possession & threat, passing, plan) and chemistry, see sb/phase2.py."""
+    from . import phase2
+    ev = None
+    if paths.OPEN_DATA:
+        from . import external
+        ev = external.events(int(paths.GAME[-1]))
+    pt = phase2.possession_threat(track, lab, ball, sides, surface, last)
+    read = lambda name: pd.read_parquet(os.path.join(tactics_dir, name)) if os.path.exists(os.path.join(tactics_dir, name)) else None
+    plan = None
+    if half == 2:            # the plan is written at half-time, from the first half only
+        team_df, press_df, trans_df, leak_df = (read("offball_team.parquet"), read("pressing.parquet"),
+                                                read("transitions.parquet"), read("offball_leak.parquet"))
+        if team_df is not None and press_df is not None:
+            plan = phase2.halftime_plan(team_df, press_df, trans_df, entries, leak_df, pt["possession"], pt["minutes"])
+    return {
+        "half_starts": [a for a, _b in paths.HALVES],
+        "possession_threat": pt,
+        "passing": phase2.passing_network(ev, sides, paths.HALVES[0][1], half=1) if ev is not None else None,
+        "plan": plan,
+        # known when the clip starts: this half from its kick-off up to the first frame shown
+        "chemistry": phase2.chemistry(track, role_df, sides, role_means, half, first, first, ev),
+    }
+
+
+GROUP_OF = {"GK": "GK", "LB": "DF", "RB": "DF", "LCB": "DF", "RCB": "DF", "CB": "DF", "LWB": "DF", "RWB": "DF",
+            "ST": "FW", "CF": "FW", "LW": "FW", "RW": "FW"}
+
+
+def open_game_squad(track, role_df, half, first, last):
+    """Home squad + first XI for an open game: every home slot is a real (anonymous) player with a
+    shirt number; his position is the role he held most in this half before the clip. Returns {squad, xi}."""
+    from . import external
+    shirts = (external.slot_jerseys(int(paths.GAME[-1])) if paths.OPEN_DATA
+              else {s: s + 1 for s in range(len(track.teams))})        # videos: track slot numbers
+    home = np.where(track.teams == 0)[0]
+    # the line-up a coach would have entered: who played where in this half before the clip starts
+    window = role_df[(role_df.team == "H") & (role_df.half == half) & (role_df.frame <= first)]
+    if window.empty:
+        window = role_df[(role_df.team == "H") & (role_df.frame >= first) & (role_df.frame <= last)]
+    counts = window.groupby(["slot", "label"]).size().reset_index(name="n").sort_values("n", ascending=False)
+    xi, used = {}, set()
+    for r in counts.itertuples():                     # greedy: the most-held (slot, role) pairs first
+        if r.label not in xi and r.slot not in used:
+            xi[r.label] = "p{}".format(shirts[r.slot])
+            used.add(r.slot)
+    main = counts.drop_duplicates("slot").set_index("slot")["label"].to_dict()
+    squad = []
+    for s in home:
+        role = main.get(s)
+        squad.append({"id": "p{}".format(shirts[s]), "num": shirts[s], "name": "Player {}".format(shirts[s]),
+                      "group": GROUP_OF.get(role, "MF") if role else "MF", "pos": [role] if role else [],
+                      "foot": None, "keys": [], "photo": None})
+    return {"squad": squad, "xi": xi}
 
 
 FINAL_THIRD = paths.PITCH[0] * 2 / 3
@@ -482,7 +561,7 @@ def shadow_block(players, teams, entries, label_idx, first, last, surface, trans
     # per 5-min block from kick-off to the end of the clip: space denied (team without the ball) and
     # rest defence (team with it), for the report's trend
     starts = {h: paths.HALVES[h - 1][0] for h in (1, 2)}
-    block = (((teams.frame - teams.half.map(starts)) / paths.FPS / 60 // 5) * 5).astype(int) + np.where(teams.half == 1, 0, 45)
+    block = (((teams.frame - teams.half.map(starts)) / paths.FPS / 60 // 5) * 5).astype(int) + np.where(teams.half == 1, 0, paths.H2)
     tt = teams.assign(block=block, denial=denial, defending=defending)
     trend = []
     for (h, b), g in tt.groupby(["half", "block"]):
@@ -529,7 +608,7 @@ def rating_rows(players, label_idx, last):
         return None, None
     q = players[(players.frame <= last) & (players.label != "GK")]
     starts = {h: paths.HALVES[h - 1][0] for h in (1, 2)}
-    minute = ((q.frame - q.half.map(starts)) / paths.FPS // 60).astype(int) + np.where(q.half == 1, 0, 45)
+    minute = ((q.frame - q.half.map(starts)) / paths.FPS // 60).astype(int) + np.where(q.half == 1, 0, paths.H2)
     g = q.assign(minute=minute).groupby(["team", "label", "half", "minute"]).agg(
         n=("shadow_score", "size"), score=("shadow_score", "sum"), contrib=("contribution", "sum")).reset_index()
     rows = [[r.team, label_idx.get(r.label, -1), int(r.half), int(r.minute), int(r.n), round(float(r.score)), round(float(r.contrib), 1)]

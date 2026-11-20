@@ -11,17 +11,62 @@ The data is gated and never committed: see .gitignore.
 import os
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CACHE_DIR = os.path.join(REPO, "cache")
-SUBMISSIONS_DIR = os.path.join(REPO, "submissions")
 EVAL_DIR = os.path.join(REPO, "evaluation")
 PUBLIC_GT = os.path.join(EVAL_DIR, "gt", "BAR-ATH_possession_gt_public.csv")
-
-GAME = "BAR-ATH"
-N_FRAMES = 199319          # tactical video frames = submission rows
 FPS = 25
-PITCH = (105.3, 68.0)      # metres, measured from corrected tracking (games.py)
-HALVES = ((11185, 90651), (110808, 190197))   # graded video frames, inclusive
-PUBLIC_WINDOW = (11185, 18684)
+
+# Which match the whole pipeline runs on. SB_GAME (or `python run.py --game ...`) picks it before
+# any module is imported, because several modules derive constants from the pitch size.
+#   BAR-ATH      the competition match (gated data, licensed for the competition only)
+#   METRICA-1..3 the open Metrica Sports sample games (github.com/metrica-sports/sample-data),
+#                usable by anyone with attribution: the portfolio version of the project
+GAMES = {
+    "BAR-ATH": {"n_frames": 199319, "pitch": (105.3, 68.0),
+                "halves": ((11185, 90651), (110808, 190197))},     # graded video frames, inclusive
+    "METRICA-1": {"n_frames": 145006, "pitch": (105.0, 68.0), "halves": ((0, 71267), (71268, 145005))},
+    "METRICA-2": {"n_frames": 141156, "pitch": (105.0, 68.0), "halves": ((0, 67940), (67941, 141155))},
+    "METRICA-3": {"n_frames": 143761, "pitch": (105.0, 68.0), "halves": ((0, 69660), (69661, 143760))},
+}
+# Your own videos (`python run.py video track ...`) register themselves as VIDEO-<name> through the
+# meta.json the video pipeline writes next to their cache.
+def _video_games():
+    import json
+    root = os.path.join(REPO, "cache")
+    out = {}
+    if os.path.isdir(root):
+        for sub in sorted(os.listdir(root)):
+            meta = os.path.join(root, sub, "meta.json")
+            if sub.startswith("video-") and os.path.isfile(meta):
+                with open(meta, encoding="utf-8") as handle:
+                    m = json.load(handle)
+                out[sub.upper()] = {"n_frames": int(m["n_frames"]), "pitch": tuple(m["pitch"]),
+                                    "halves": tuple(tuple(h) for h in m["halves"]), "video": m}
+    return out
+
+
+GAME = os.environ.get("SB_GAME", "BAR-ATH").upper()
+if GAME.startswith("VIDEO-"):
+    GAMES.update(_video_games())
+if GAME not in GAMES:
+    raise SystemExit("Unknown game {!r}; choose one of {} (videos: run python run.py video track first)".format(GAME, ", ".join(GAMES)))
+OPEN_DATA = GAME.startswith("METRICA")      # open games with Metrica event data
+VIDEO = GAME.startswith("VIDEO-")           # tracking made by sb/video.py from a video
+ANONYMOUS = OPEN_DATA or VIDEO              # players shown by number only, never real names
+# Match minute at which the second half starts. A video without halves is analysed as two equal
+# parts (the half-based tools need two), and its second part starts at its real clip minute.
+H2 = float(GAMES[GAME]["video"].get("h2_minute", 45)) if VIDEO else 45
+N_FRAMES = GAMES[GAME]["n_frames"]        # tracking frames = submission rows
+PITCH = GAMES[GAME]["pitch"]              # metres
+HALVES = GAMES[GAME]["halves"]
+PUBLIC_WINDOW = (11185, 18684)            # BAR-ATH only
+
+# The competition keeps its original folders (so the submitted file still regenerates byte for
+# byte); every open game gets its own subfolder.
+_SUB = "" if GAME == "BAR-ATH" else GAME.lower()
+CACHE_DIR = os.path.join(REPO, "cache", _SUB)
+SUBMISSIONS_DIR = os.path.join(REPO, "submissions", _SUB)
+EXPORTS_DIR = os.path.join(REPO, "exports", _SUB)
+REFERENCE_LABELS = os.path.join(CACHE_DIR, "reference_labels.csv")    # open games: from Metrica events
 
 
 def data_dir():

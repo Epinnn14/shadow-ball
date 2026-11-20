@@ -3,230 +3,119 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0A0B0D">
+<meta name="description" content="Shadow Ball: a free coaching assistant that reads player tracking and shows who controls the dangerous space.">
 <title>Shadow Ball</title>
-<link rel="stylesheet" href="style.css?v=20261030c">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Work+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="style.css?v=20261122a">
+<link rel="stylesheet" href="home.css?v=20261122a">
+<script src="theme.js?v=20261122a"></script>
+<script src="i18n-id.js?v=20261122a"></script>
+<script src="i18n.js?v=20261122a"></script>
 </head>
-<body>
-<header class="bar">
-  <div class="brand">
-    <span class="mark" aria-hidden="true"></span>
-    <span class="word">Shadow<b>Ball</b></span>
-  </div>
-  <div class="match" id="match"></div>
-  <div class="clockbox">
-    <span class="onair"><i></i>LIVE</span>
-    <span class="clock" id="clock">--:--</span>
-    <span class="poss" id="poss"></span>
-  </div>
-  <div class="transport">
-    <button type="button" class="icon play" id="playBtn" aria-label="Play"></button>
-    <input type="range" id="scrub" min="0" max="1" step="0.2" value="0" aria-label="Replay time">
-    <div class="seg" id="speeds" role="group" aria-label="Speed">
-      <button type="button" data-speed="1" class="on">1×</button><button type="button" data-speed="3">3×</button><button type="button" data-speed="10">10×</button>
-    </div>
-    <button type="button" class="ghost desk" id="setupBtn">Line-up</button>
-    <button type="button" class="ghost desk" id="reportBtn">Report</button>
-    <button type="button" class="ghost" id="followBtn" hidden></button>
+<body class="home">
+<header class="bar site-bar">
+  <a class="brand" href="./" aria-label="Shadow Ball home"><span class="mark" aria-hidden="true"></span><span class="word" data-no-i18n>Shadow<b>Ball</b></span></a>
+  <nav class="site-nav" aria-label="Main">
+    <a href="playground.html">Tactics board</a>
+    <a href="replay.html">Match replay</a>
+    <a href="#own">Your own match</a>
+  </nav>
+  <div class="bar-tools">
+    <button type="button" class="ghost lang-toggle" data-lang-toggle>EN</button>
+    <button type="button" class="ghost theme-toggle" data-theme-toggle>Auto</button>
   </div>
 </header>
 
-<!-- Kick-off setup: the coach enters the XI and the formation -->
-<section class="setup" id="setup" hidden>
-  <div class="setup-head">
+<main>
+  <section class="hero wrap">
+    <div class="hero-text">
+      <h1>See the space, not just the ball.</h1>
+      <p class="lead">Shadow Ball reads where every player stands and shows who controls the dangerous space, where each player could have been, and what to change at half-time. Free, in your browser.</p>
+      <div class="cta">
+        <a class="primary" href="playground.html">Open the tactics board</a>
+        <a class="ghost" href="replay.html">Watch a match replay</a>
+      </div>
+    </div>
+    <figure class="hero-board">
+      <div class="pitch-holder"><canvas id="heroPitch" aria-label="A mid-block: blue defends, the shaded space shows who controls it"></canvas></div>
+      <figcaption><span class="sw sw-h"></span>space your team controls <span class="sw sw-a"></span>space they control <span class="sw sw-m"></span>best move the model finds · <span id="heroDenied"></span></figcaption>
+    </figure>
+  </section>
+
+  <section class="tools wrap" aria-labelledby="toolsTitle">
+    <h2 id="toolsTitle" class="sec-title">Three ways to use it</h2>
+    <article class="tool tool-main">
+      <div>
+        <h3>Tactics board</h3>
+        <p>Pick two LaLiga 2026/27 sides, a formation and the eleven. Choose a moment (build-up, high press, mid-block, final-third attack, a ball lost high, a low block), then drag players and the ball. The model updates on every move.</p>
+        <a class="primary" href="playground.html">Open the tactics board</a>
+      </div>
+      <div>
+        <ul class="ticks">
+          <li>Share of the dangerous space you own or deny</li>
+          <li>Rest defence: what you would still hold if the ball were lost now</li>
+          <li>The three single moves worth most, and a four-player unit move to try</li>
+        </ul>
+      </div>
+    </article>
+    <article class="tool">
+      <h3>Match replay</h3>
+      <p>Fifteen minutes of a real match (open data from Metrica Sports, players shown by number) as a bench would see it: the live pitch, the Shadow pitch with each player's best position, pressing traps, fatigue, and from the second half a plan built from the first.</p>
+      <a class="ghost" href="replay.html">Watch the replay</a>
+    </article>
+    <article class="tool" id="own">
+      <h3>Your own match</h3>
+      <p>Film a game from a high, wide angle. The free Python tools turn the video into tracking on your computer (nothing is uploaded), then open the result here.</p>
+      <ol class="steps">
+        <li><code>python run.py video frame match.mp4</code>, then mark four pitch points on <a href="calibrate.html">the calibration page</a> (the picture stays in your browser)</li>
+        <li><code>python run.py video track match.mp4 --calib calib.json</code> and the commands it prints</li>
+        <li>Open the <code>clip.json</code> it writes</li>
+      </ol>
+      <a class="ghost" href="replay.html#own">Open my clip.json</a>
+    </article>
+  </section>
+
+  <section class="method wrap" aria-labelledby="methodTitle">
     <div>
-      <h1>Kick-off setup</h1>
-      <p class="muted">Pick a formation, enter names and numbers, then place your players. Shadow Ball matches these positions to the players the camera detects.</p>
+      <h2 id="methodTitle" class="sec-title">What the numbers mean</h2>
+      <p>For every spot on the pitch the model asks who would get there first, then weights the spot by how often the ball reaches the box from there. Your share of that weighted space is <b>space owned</b> with the ball and <b>space denied</b> without it.</p>
+      <p>Does it matter? When the defending side denies the most space, attackers reach the final third within 10 seconds far less often:</p>
     </div>
-    <button type="button" class="primary" id="startBtn">Go live</button>
-  </div>
-  <div class="setup-grid">
-    <div class="panel">
-      <h2>Formation</h2>
-      <div class="formations" id="formationList"></div>
-      <h2 class="mt">Opponent</h2>
-      <label class="field"><span>Name</span><input id="oppName" maxlength="40"></label>
-      <div class="kits">
-        <label class="field"><span>Our colour</span><input type="color" id="kitH" value="#3D7BFF"></label>
-        <label class="field"><span>Their colour</span><input type="color" id="kitA" value="#F2613F"></label>
-      </div>
-      <p class="muted small" id="detected"></p>
+    <div class="table-wrap">
+      <table class="valid">
+        <caption>Final third reached within 10 s, high vs low space denied</caption>
+        <thead><tr><th scope="col">Match</th><th scope="col">High denial</th><th scope="col">Low denial</th></tr></thead>
+        <tbody>
+          <tr><td>Open game 1</td><td>27.3%</td><td>38.0%</td></tr>
+          <tr><td>Open game 2</td><td>28.1%</td><td>43.7%</td></tr>
+          <tr><td>Open game 3</td><td>15.3%</td><td>24.6%</td></tr>
+          <tr><td>Competition match</td><td>20.8%</td><td>30.9%</td></tr>
+        </tbody>
+      </table>
     </div>
-    <div class="panel board">
-      <div class="board-head">
-        <div class="seg" id="setupTabs"><button type="button" data-t="H" class="on" id="setupUs">Us</button><button type="button" data-t="A" id="setupThem">Opponent (optional)</button></div>
-        <button type="button" class="ghost small" id="stepBtn">Fill one by one</button>
-      </div>
-      <div class="lu-card">
-        <div class="lu-head"><b id="boardTitle">Line-up</b><span id="boardCount" class="muted small"></span></div>
-        <div class="board-pitch" id="board"></div>
-      </div>
-      <span class="muted small" id="slotHint">Click a position, then a player</span>
-    </div>
-    <div class="panel">
-      <div class="picker" id="picker" hidden></div>
-      <div class="opp-paste" id="oppPaste" hidden>
-        <h2>Paste their XI</h2>
-        <p class="muted small">One player per line, "number name", in the order of the formation (goalkeeper, then the back line from their left, up to the strikers). Names stay on this laptop.</p>
-        <textarea id="oppText" rows="11" placeholder="1 Unai Simón&#10;18 Óscar de Marcos&#10;..."></textarea>
-        <button type="button" class="ghost small" id="oppFill">Fill the line-up</button>
-      </div>
-      <div class="board-head" id="squadHead"><h2>Squad</h2><button type="button" class="ghost small" id="addPlayer">+ Player</button></div>
-      <div class="squad-edit" id="squadEdit"></div>
-      <div class="profile" id="profileEditor" hidden></div>
-      <p class="muted small" id="photoNote">Photos are added from this laptop and stay on it (none are bundled: photos are copyrighted).</p>
-    </div>
-  </div>
-</section>
+  </section>
 
-<main class="livegrid" id="live">
-  <div class="col-main">
-    <section class="stage">
-      <div class="strip phoneonly" id="strip" aria-label="Possession per minute"></div>
-      <div class="mom desk"><span class="muted small">Momentum</span><canvas id="momentum" aria-label="Momentum per minute: ball in their final third (up) and in ours (down)"></canvas></div>
-      <div class="pitch-holder">
-        <canvas id="pitch" aria-label="Live pitch"></canvas>
-        <div class="dir" id="dir"></div>
-      </div>
-      <div class="stats desk" id="stats"></div>
-    </section>
-
-    <!-- The core: where our players should have been, a second ago. Kept off the live pitch. -->
-    <section class="shadowcard" id="shadowCard">
-      <header class="sh-head">
-        <div class="sh-title">
-          <span class="tag shadow" id="shTag">Shadow</span>
-          <div><b id="shTitle">Best positions</b><span class="muted small" id="shSub">the last second, re-computed every second</span></div>
-        </div>
-        <div class="sh-kpis">
-          <div class="shk"><span id="shDenK">Space denied</span><b id="shDen">–</b><em id="shDenU"></em></div>
-          <div class="shk"><span>Rest defence</span><b id="shRest">–</b><em id="shRestU">while we have the ball</em></div>
-          <div class="shk"><span>Shadow Replays</span><b id="shGap">–</b><em>our lapses so far</em></div>
-          <canvas id="shSpark" aria-label="Space denied, last 2 minutes"></canvas>
-        </div>
-      </header>
-      <div class="sh-pitch">
-        <canvas id="shadowPitch" aria-label="Shadow pitch: best reachable positions"></canvas>
-        <div class="sh-replay" id="shReplay" hidden><b>Shadow Replay</b><span id="shReplayAt"></span><i id="shReplayBar"></i>
-          <button type="button" class="ghost small" id="shReplayClose">Back to live</button></div>
-        <div class="sh-calm" id="shCalm" hidden>Shape holds · no move worth calling</div>
-        <div class="sh-calm warn" id="shWarn" hidden>Thin rest defence · cover if we lose it</div>
-      </div>
-      <div class="sh-moves" id="shMoves"></div>
-      <p class="sh-legend"><span><i class="lg-arrow"></i>better position he could reach in that second</span><span><i class="lg-arrow cover"></i>cover position if we lose the ball</span><span><i class="lg-zone"></i>dangerous space we control</span><span><i class="lg-zone them"></i>…they control</span><span>% = share of the dangerous space it wins back</span></p>
-    </section>
-
-    <section class="card phoneonly">
-      <header><h2>Need to know</h2><span class="muted small">now</span></header>
-      <div class="prio" id="prioPhone"></div>
-    </section>
-
-    <div class="advice desk">
-      <article class="adv" id="advAtk">
-        <header><span class="tag atk">Attack</span><span class="muted small">last 30 s</span></header>
-        <canvas></canvas>
-        <div class="adv-text"><b></b><span></span></div>
-      </article>
-      <article class="adv" id="advDef">
-        <header><span class="tag def">Defend</span><span class="muted small">last 30 s</span></header>
-        <canvas></canvas>
-        <div class="adv-text"><b></b><span></span></div>
-      </article>
-    </div>
-
-    <div class="advice desk">
-      <article class="adv" id="pressCard">
-        <header><span class="tag neutral">Pressing traps</span>
-          <div class="seg" id="pressTabs"><button type="button" data-t="H" class="on" id="pressUs">Us</button><button type="button" data-t="A" id="pressThem">Them</button></div></header>
-        <canvas id="pressMap"></canvas>
-        <div class="adv-text"><b id="pressTitle"></b><span id="pressSub"></span></div>
-        <div class="sp-legend"><span><i class="zsw trap"></i>trap: pressing wins it back</span><span><i class="zsw leak"></i>leak: pressing opens the way</span><span>won back in 5 s: press · hold</span></div>
-      </article>
-      <article class="adv" id="leakCard">
-        <header><span class="tag def">Space leaks</span><span class="muted small">per position · last 10 min vs first 15 min</span></header>
-        <div class="leaks" id="leakList"></div>
-        <p class="note">Measured on the space itself: the dangerous space each player leaves on the table while we defend. Running data alone does not show this.</p>
-      </article>
-    </div>
-
-    <div class="advice desk">
-      <article class="adv" id="spCard">
-        <header><span class="tag neutral">Set pieces</span><span class="muted small">since kick-off · Smart Tagging</span></header>
-        <canvas id="spMap"></canvas>
-        <div class="sp-legend"><span><i class="tri"></i>corner</span><span><i class="dot"></i>free kick</span><span><i class="sq"></i>throw-in</span><span><i class="ring"></i>ball reached the box</span></div>
-        <div id="spTable"></div>
-      </article>
-      <article class="adv" id="duelCard">
-        <header><span class="tag def">Duel 1v1</span><span class="muted small">last 10 min · our half</span></header>
-        <canvas id="duelMap"></canvas>
-        <div class="duels" id="duelList"></div>
-      </article>
-    </div>
-
-    <section class="squad">
-      <div class="squad-head">
-        <h2>Movement</h2>
-        <div class="seg" id="teamTabs"><button type="button" data-team="H" class="on" id="tabH">Us</button><button type="button" data-team="A" id="tabA">Them</button></div>
-      </div>
-      <div class="squad-body">
-        <div class="plist" id="plist"></div>
-        <div class="pdetail" id="pdetail">
-          <canvas id="heat"></canvas>
-          <div class="pd-stats" id="pdStats"></div>
-        </div>
-      </div>
-    </section>
-  </div>
-
-  <aside class="col-side desk">
-    <section class="card">
-      <header><h2>Need to know</h2><span class="muted small">now</span></header>
-      <div class="prio" id="prio"></div>
-    </section>
-    <section class="card" id="luCard">
-      <header><h2>Shadow ratings</h2><span class="muted small" id="luNote">live · 6.5 = average</span></header>
-      <div class="lu-team" id="luTop"></div>
-      <div class="lu-live" id="luLive"></div>
-      <div class="lu-team" id="luBot"></div>
-      <p class="note">Rating from movement without the ball (Shadow score) and the dangerous space each player holds against the average for his position.</p>
-    </section>
-    <section class="card" id="planCard">
-      <header><h2>Plan B</h2><span class="muted small">ranked · simulated on the last 30 s</span></header>
-      <div class="plan" id="plan"></div>
-      <div class="ba" id="ba" hidden>
-        <figure><canvas id="baBefore"></canvas><figcaption id="baNow">Now</figcaption></figure>
-        <figure><canvas id="baAfterC"></canvas><figcaption id="baAfter">After</figcaption></figure>
-      </div>
-    </section>
-    <section class="card">
-      <header><h2>Best substitutes</h2><span class="muted small" id="subFor"></span></header>
-      <div class="subs" id="subs"></div>
-    </section>
-    <section class="card">
-      <header><h2>Attack channels</h2><span class="muted small">last 15 min</span></header>
-      <canvas id="channels"></canvas>
-      <p class="note" id="watch"></p>
-    </section>
-    <section class="card">
-      <header><h2>Freshness</h2><span class="muted small" id="fatigueNote"></span></header>
-      <canvas id="fatigueMap"></canvas>
-      <div class="scale"><span><i style="background:var(--ok)"></i>fresh</span><span><i style="background:var(--warn)"></i>watch</span><span><i style="background:var(--bad)"></i>tired</span></div>
-    </section>
-    <section class="card">
-      <header><h2>Copilot</h2><span class="muted small" id="feedCount"></span></header>
-      <div class="feed" id="feed"></div>
-    </section>
-  </aside>
+  <section class="limits wrap" aria-labelledby="limitsTitle">
+    <h2 id="limitsTitle" class="sec-title">What it cannot do yet</h2>
+    <ul>
+      <li>The model knows nothing about offside, pressure on the ball or passing lanes, so defensive advice leans towards dropping deeper.</li>
+      <li>From video, players are found well (86–89% within 2 m in tests) but dead balls are not, so possession from video is still rough.</li>
+      <li>Squads come from club sites and Wikipedia; a few pages had not been updated this season. Every name can be changed on the board.</li>
+      <li>Chemistry between neighbouring players is our own indicator and has not been checked against results.</li>
+    </ul>
+  </section>
 </main>
 
-<section class="report" id="report" hidden>
-  <div class="rep-actions"><button type="button" class="primary" id="repPrint">Print / save PDF</button><button type="button" class="ghost" id="repClose">Close</button></div>
-  <div class="sheet" id="repBody"></div>
-</section>
+<footer class="site-foot wrap">
+  <p><b>Shadow Ball</b> · by <a href="https://github.com/Epinnn14">epinnn</a> · <a href="https://github.com/Epinnn14/shadow-ball">source code</a></p>
+  <p>Match data: Metrica Sports sample data (github.com/metrica-sports/sample-data). Squads: club sites and Wikipedia. No club logos or player photos. Started as an entry to More Than A Hack 2027.</p>
+</footer>
 
-<div class="loading" id="loading">Loading…</div>
-<script src="data.js?v=20261030c"></script>
-<script src="decide.js?v=20261030c"></script>
-<script src="app.js?v=20261030c"></script>
+<script src="data.js?v=20261122a"></script>
+<script src="threat.js?v=20261122a"></script>
+<script src="model.js?v=20261122a"></script>
+<script src="pitch.js?v=20261122a"></script>
+<script src="home.js?v=20261122a"></script>
 </body>
 </html>

@@ -168,7 +168,7 @@ window.SB_I18N_ID = {
 "free kick": "tendangan bebas",
 "throw-in": "lemparan ke dalam",
 "ball reached the box": "bola masuk kotak penalti",
-"Corners": "Sepak pojok",
+"Corners": "Tendangan sudut",
 "Free kicks": "Tendangan bebas",
 "Free kicks, final third": "Tendangan bebas, sepertiga akhir",
 "Other free kicks": "Tendangan bebas lain",
@@ -403,7 +403,64 @@ window.SB_I18N_ID = {
 "our half": "area kita",
 "our third": "sepertiga kita",
 "their half": "area lawan",
-"their third": "sepertiga lawan"
+"their third": "sepertiga lawan",
+"Moments": "Momen",
+"Full match": "Laga penuh",
+"Playing style": "Gaya bermain",
+"Kick off": "Mulai",
+"Pause": "Jeda",
+"Resume": "Lanjutkan",
+"Start the second half": "Mulai babak kedua",
+"New match": "Laga baru",
+"Skip to half time": "Lompat ke turun minum",
+"Skip to full time": "Lompat ke akhir laga",
+"With the ball": "Dengan bola",
+"Without it": "Tanpa bola",
+"Match stats": "Statistik laga",
+"First half": "Babak pertama",
+"Events": "Kejadian",
+"Shots (on target)": "Tembakan (tepat sasaran)",
+"Expected goals (xG)": "Expected goals (xG)",
+"Passes": "Umpan",
+"Pass accuracy": "Akurasi umpan",
+"Balls won in their half": "Rebut bola di area lawan",
+"Goal": "Gol",
+"HT": "HT",
+"FT": "FT",
+"Second-half suggestion": "Saran babak kedua",
+"What would have fitted": "Yang semestinya cocok",
+"Find the best set-up": "Cari susunan terbaik",
+"Simulating…": "Menyimulasikan…",
+"Use": "Pakai",
+"Your set-up now": "Susunan Anda sekarang",
+"No goals or big chances yet.": "Belum ada gol atau peluang besar.",
+"No events yet.": "Belum ada kejadian.",
+"Counter-attack": "Serangan balik",
+"Direct": "Bola langsung",
+"Wing play": "Main sayap",
+"Pick both teams, formations, styles and players on the left, then kick off. 2 × 45 minutes, played in your browser.": "Pilih kedua tim, formasi, gaya bermain dan pemain di kiri, lalu mulai. 2 × 45 menit, dimainkan di browser Anda.",
+"Half time. Read the best positions, ask for a second-half suggestion, or change formation, style or players on the left, then start the second half.": "Turun minum. Lihat posisi terbaik, minta saran babak kedua, atau ganti formasi, gaya atau pemain di kiri, lalu mulai babak kedua.",
+"Full time. The suggestion below shows which set-up would have suited this opponent.": "Laga selesai. Saran di bawah menunjukkan susunan yang semestinya cocok melawan lawan ini.",
+"At half time the board plays every formation and style for your team against their set-up and suggests what fits best.": "Saat turun minum papan memainkan setiap formasi dan gaya untuk tim Anda melawan susunan lawan, lalu menyarankan yang paling cocok.",
+"Every 20 seconds of play the model looks for the best moves for your team (each player within 5 m). Arrows on the pitch, with the layer on, go from a player's average position to where it kept wanting him.": "Setiap 20 detik permainan model mencari gerakan terbaik untuk tim Anda (tiap pemain maksimal 5 m). Panah di lapangan, saat lapisan aktif, menunjuk dari posisi rata-rata pemain ke tempat yang terus diinginkan model.",
+"Play some minutes first: the board samples the match every 20 seconds.": "Mainkan beberapa menit dulu: papan mengambil sampel laga setiap 20 detik.",
+"No player the model kept wanting somewhere else: your shape held up in this phase.": "Tidak ada pemain yang terus diminta model pindah: bentuk tim Anda bertahan di fase ini.",
+"How the match works": "Cara laga bekerja",
+"Each second both teams take the shape of their formation and style, shifted with the ball. The player on the ball weighs passes, through balls, carries, crosses and shots by how much they raise the chance of reaching the box (learned from open tracking data) against the risk of losing it. Shot quality (xG) depends on distance, pressure and bodies in the way.": "Setiap detik kedua tim mengambil bentuk formasi dan gayanya, bergeser mengikuti bola. Pemain yang memegang bola menimbang umpan, umpan terobosan, menggiring, umpan silang dan tembakan menurut seberapa besar peluang mencapai kotak penalti naik (dipelajari dari data tracking terbuka) dibanding risiko kehilangan bola. Kualitas tembakan (xG) bergantung pada jarak, tekanan dan pemain yang menghalangi.",
+"A tactics toy, not a prediction: squads carry no ratings, so every player is equal apart from the pace you set, and a different kick-off gives a different match.": "Mainan taktik, bukan prediksi: skuad tidak punya rating, jadi semua pemain setara kecuali kecepatan yang Anda atur, dan setiap kick-off menghasilkan laga yang berbeda.",
+"Your current set-up is within the simulation noise of the best one.": "Susunan Anda sekarang masih dalam batas acak simulasi dari yang terbaik.",
+"Players are equal here: squads carry no ratings.": "Semua pemain setara di sini: skuad tidak punya rating.",
+"Every LaLiga 2026/27 side is ready on an empty board. Pick your team and the opponent, a formation, a playing style and the players you like, then kick off: 2 × 45 minutes played in your browser. At half time it shows where the model wanted your players and which formation and style would suit the second half.": "Semua tim LaLiga 2026/27 siap di papan kosong. Pilih tim Anda dan lawannya, formasi, gaya bermain dan pemain favorit, lalu mulai: 2 × 45 menit dimainkan di browser Anda. Saat turun minum terlihat di mana model menginginkan pemain Anda dan formasi serta gaya apa yang cocok untuk babak kedua.",
+"Play a match": "Mainkan laga",
+"Have video of your own game?": "Punya video pertandingan sendiri?",
+"Open the clip.json": "Buka clip.json",
+"it writes in the replay": "yang dihasilkan di replay",
+"Pick two LaLiga 2026/27 sides, a formation, a style and the eleven. Freeze a moment (build-up, high press, mid-block, final-third attack, a ball lost high, a low block) and drag players and the ball, or play the full 90 minutes.": "Pilih dua tim LaLiga 2026/27, formasi, gaya dan sebelas pemain. Bekukan satu momen (build-up, high press, mid-block, serangan sepertiga akhir, bola hilang di depan, low block) lalu geser pemain dan bola, atau mainkan 90 menit penuh.",
+"A full match with live stats, best positions and a half-time suggestion": "Laga penuh dengan statistik langsung, posisi terbaik dan saran saat turun minum",
+"forward": "ke depan",
+"back": "ke belakang",
+"to his right": "ke kanannya",
+"to his left": "ke kirinya"
 },
 "patterns": [
 [
@@ -817,6 +874,34 @@ window.SB_I18N_ID = {
 [
 "Opponent goal-side of him (\\d+)% of the time",
 "Lawan di sisi gawangnya $1% waktu"
+],
+[
+"Big chance · (.+)",
+"Peluang besar · $1"
+],
+[
+"Half time (\\d+)–(\\d+)",
+"Turun minum $1–$2"
+],
+[
+"Full time (\\d+)–(\\d+)",
+"Laga selesai $1–$2"
+],
+[
+"([\\d.,]+) m (forward|back|to his right|to his left) · in (\\d+)% of (\\d+) moments",
+"$1 m $2 · di $3% dari $4 momen"
+],
+[
+"xG difference per half ([+−][\\d.]+) \\(you ([\\d.]+), them ([\\d.]+)\\)",
+"Selisih xG per babak $1 (Anda $2, lawan $3)"
+],
+[
+"From (\\d+) simulated 45-minute halves per set-up \\((\\d+) set-ups\\) against (.+?) (\\d-[\\d-]+)\\. (.+)",
+"Dari $1 simulasi babak 45 menit per susunan ($2 susunan) melawan $3 $4. $5"
+],
+[
+"(Possession|High press|Counter-attack|Direct|Wing play|Low block) (\\d-[\\d-]+) against (Possession|High press|Counter-attack|Direct|Wing play|Low block) (\\d-[\\d-]+)\\.",
+"$1 $2 melawan $3 $4."
 ]
 ]
 };

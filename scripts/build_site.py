@@ -19,7 +19,7 @@ import sys
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PAGES = ("index.html", "replay.html", "playground.html", "calibrate.html")
 ASSETS = ("style.css", "home.css", "playground.css", "theme.js", "i18n.js", "i18n-id.js", "data.js", "decide.js", "app.js",
-          "playground.js", "home.js", "pitch.js", "model.js", "laliga.js", "threat.js")
+          "playground.js", "home.js", "pitch.js", "model.js", "laliga.js", "threat.js", "sim.js", "sim-worker.js")
 FLAG = "<script>window.SB_STATIC = true;</script>\n"
 
 

@@ -65,3 +65,7 @@ table.valid tbody tr:last-child td { border-bottom: none; }
 }
 .tools > .tool:not(.tool-main) { height: 100%; }
 .tool:not(.tool-main) > a { margin-top: auto; }
+.own-video { width: 100%; margin-top: 4px; border-top: 1px solid var(--line); padding-top: 12px; }
+.own-video summary { cursor: pointer; font-weight: 600; font-size: 15px; color: var(--text); min-height: 32px; display: flex; align-items: center; }
+.own-video .steps { margin-top: 10px; }
+.tool:not(.tool-main) > a.primary { margin-top: auto; }

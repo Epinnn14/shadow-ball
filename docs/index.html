@@ -7,11 +7,11 @@
 <title>Shadow Ball</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Work+Sans:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="style.css?v=20261122a">
-<link rel="stylesheet" href="home.css?v=20261122a">
-<script src="theme.js?v=20261122a"></script>
-<script src="i18n-id.js?v=20261122a"></script>
-<script src="i18n.js?v=20261122a"></script>
+<link rel="stylesheet" href="style.css?v=20261123a">
+<link rel="stylesheet" href="home.css?v=20261123a">
+<script src="theme.js?v=20261123a"></script>
+<script src="i18n-id.js?v=20261123a"></script>
+<script src="i18n.js?v=20261123a"></script>
 </head>
 <body class="home">
 <header class="bar site-bar">
@@ -48,7 +48,7 @@
     <article class="tool tool-main">
       <div>
         <h3>Tactics board</h3>
-        <p>Pick two LaLiga 2026/27 sides, a formation and the eleven. Choose a moment (build-up, high press, mid-block, final-third attack, a ball lost high, a low block), then drag players and the ball. The model updates on every move.</p>
+        <p>Pick two LaLiga 2026/27 sides, a formation, a style and the eleven. Freeze a moment (build-up, high press, mid-block, final-third attack, a ball lost high, a low block) and drag players and the ball, or play the full 90 minutes.</p>
         <a class="primary" href="playground.html">Open the tactics board</a>
       </div>
       <div>
@@ -56,6 +56,7 @@
           <li>Share of the dangerous space you own or deny</li>
           <li>Rest defence: what you would still hold if the ball were lost now</li>
           <li>The three single moves worth most, and a four-player unit move to try</li>
+          <li>A full match with live stats, best positions and a half-time suggestion</li>
         </ul>
       </div>
     </article>
@@ -66,13 +67,16 @@
     </article>
     <article class="tool" id="own">
       <h3>Your own match</h3>
-      <p>Film a game from a high, wide angle. The free Python tools turn the video into tracking on your computer (nothing is uploaded), then open the result here.</p>
-      <ol class="steps">
-        <li><code>python run.py video frame match.mp4</code>, then mark four pitch points on <a href="calibrate.html">the calibration page</a> (the picture stays in your browser)</li>
-        <li><code>python run.py video track match.mp4 --calib calib.json</code> and the commands it prints</li>
-        <li>Open the <code>clip.json</code> it writes</li>
-      </ol>
-      <a class="ghost" href="replay.html#own">Open my clip.json</a>
+      <p>Every LaLiga 2026/27 side is ready on an empty board. Pick your team and the opponent, a formation, a playing style and the players you like, then kick off: 2 × 45 minutes played in your browser. At half time it shows where the model wanted your players and which formation and style would suit the second half.</p>
+      <a class="primary" href="playground.html#match">Play a match</a>
+      <details class="own-video">
+        <summary>Have video of your own game?</summary>
+        <ol class="steps">
+          <li><code>python run.py video frame match.mp4</code>, then mark four pitch points on <a href="calibrate.html">the calibration page</a> (the picture stays in your browser)</li>
+          <li><code>python run.py video track match.mp4 --calib calib.json</code> and the commands it prints</li>
+          <li><a href="replay.html#own">Open the clip.json</a> it writes in the replay</li>
+        </ol>
+      </details>
     </article>
   </section>
 
@@ -112,10 +116,10 @@
   <p>Match data: Metrica Sports sample data (github.com/metrica-sports/sample-data). Squads: club sites and Wikipedia. No club logos or player photos. Started as an entry to More Than A Hack 2027.</p>
 </footer>
 
-<script src="data.js?v=20261122a"></script>
-<script src="threat.js?v=20261122a"></script>
-<script src="model.js?v=20261122a"></script>
-<script src="pitch.js?v=20261122a"></script>
-<script src="home.js?v=20261122a"></script>
+<script src="data.js?v=20261123a"></script>
+<script src="threat.js?v=20261123a"></script>
+<script src="model.js?v=20261123a"></script>
+<script src="pitch.js?v=20261123a"></script>
+<script src="home.js?v=20261123a"></script>
 </body>
 </html>

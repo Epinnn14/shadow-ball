@@ -3,19 +3,33 @@
 A free coaching assistant for football, by [epinnn](https://github.com/Epinnn14). It reads where
 every player stands and shows who controls the dangerous space, where each player could have been,
 and what to change at half-time. Use it as a bench assistant, to prepare a match, or just to argue
-about tactics with friends.
+about tactics with friends. English and Bahasa Indonesia, light and dark.
 
-**Use it online: https://epinnn14.github.io/shadow-ball/** (English and Indonesian, light and dark)
+**[Open the website](https://epinnn14.github.io/shadow-ball/)** ·
+[Tactics board](https://epinnn14.github.io/shadow-ball/playground.html) ·
+[Match replay](https://epinnn14.github.io/shadow-ball/replay.html) ·
+[Video calibration](https://epinnn14.github.io/shadow-ball/calibrate.html) ·
+[Releases](https://github.com/Epinnn14/shadow-ball/releases)
 
-- **Tactics board**: pick two LaLiga 2026/27 sides, a formation and the eleven, choose a moment
-  (build-up, high press, mid-block, final-third attack, a ball lost high, a low block), drag players
-  and the ball, and read the model live: dangerous space owned or denied, rest defence, the three
-  best single moves and a four-player unit move.
-- **Match replay**: fifteen minutes of a real match (Metrica Sports open data) as a bench sees it:
-  live pitch, Shadow pitch, pressing traps, fatigue, ratings, a half-time plan, a report.
-- **Your own match**: film from a high, wide angle; the Python tools here turn the video into
-  tracking on your computer, then open the resulting `clip.json` on the site (read in the browser,
-  never uploaded).
+[![The Shadow Ball home page: a mid-block drawn by the model, blue space against orange space](docs/img/home.jpg)](https://epinnn14.github.io/shadow-ball/)
+
+| Tactics board | Match replay |
+| --- | --- |
+| [![Tactics board: Barcelona against Real Madrid, final-third attack, best moves as violet arrows](docs/img/tactics-board.jpg)](https://epinnn14.github.io/shadow-ball/playground.html) | [![Match replay: the live pitch, need-to-know cards and Shadow ratings](docs/img/replay.jpg)](https://epinnn14.github.io/shadow-ball/replay.html) |
+| Pick two LaLiga 2026/27 sides, a formation, a style and the eleven. Moments: choose a scenario (build-up, high press, mid-block, final-third attack, a ball lost high, a low block), drag players and the ball. The model shows the dangerous space owned or denied, rest defence, the three best single moves and a four-player unit move. | Fifteen minutes of a real match (Metrica Sports open data, players by number) as a bench sees it: live pitch, Shadow pitch, pressing traps, fatigue, ratings, a half-time plan, a report. |
+
+| Full match: half time |
+| --- |
+| [![Full match at half time: average positions of your players with arrows to where the model wanted them, live stats and the second-half suggestion](docs/img/full-match.jpg)](https://epinnn14.github.io/shadow-ball/playground.html#match) |
+
+**Your own match**: [play one in the browser](https://epinnn14.github.io/shadow-ball/playground.html#match).
+Pick your LaLiga side and the opponent, a formation, a playing style and the players you like, and
+watch 2 x 45 minutes. At half time the board shows where the model wanted your players and which
+formation and style would suit the second half. See [Full match](#full-match).
+
+Have video of your own game? Film from a high, wide angle; the Python tools in this repository turn
+it into tracking on your computer, then [open the resulting `clip.json` on the site](https://epinnn14.github.io/shadow-ball/replay.html#own)
+(read in the browser, never uploaded). See [Your own match video](#your-own-match-video).
 
 Under the hood, from x/y positions only:
 
@@ -86,12 +100,12 @@ python run.py --game METRICA-2 score        # spellF1 / macroF1 against them
 python run.py --game METRICA-2 roles && python run.py --game METRICA-2 tactics && python run.py --game METRICA-2 offball
 python run.py --game METRICA-2 demo         # replay clip 55'-70'
 python run.py --game METRICA-2 serve        # open the printed address (laptop + phones on the same Wi-Fi)
-python scripts/build_site.py --game METRICA-2   # static copy in site/, no server needed
+python scripts/build_site.py --game METRICA-2   # the website in docs/, no server needed
 ```
 
 `--game` takes METRICA-1, METRICA-2 or METRICA-3 (`SB_GAME` works too); each game gets its own
 folders under `cache/`, `submissions/` and `exports/`. On the open games players appear as
-"Player <shirt number>": real names and photos are never shipped. Data: Metrica Sports sample
+"Player" plus the shirt number: real names and photos are never shipped. Data: Metrica Sports sample
 data, https://github.com/metrica-sports/sample-data.
 
 ## Your own match video
@@ -117,13 +131,37 @@ video is licensed for the competition only.
 
 ## Tactics board
 
-`demo/playground.html` (on the website): pick two LaLiga 2026/27 sides, a formation and the
-XI from each squad, choose a scenario (build-up, high press, mid-block, final-third attack, lost it
+`demo/playground.html` (on the website): pick two LaLiga 2026/27 sides, a formation, a playing
+style and the XI from each squad. **Moments** tab: choose a scenario (build-up, high press, mid-block, final-third attack, lost it
 high, low block), drag any player or the ball, and read the model live: dangerous space owned or
 denied, rest defence, the three best single moves and a simulated unit move of up to four players.
 Pace per player can be set; it starts at 1.00x because squads list no speeds. Squads come from each
 club's published list or its Wikipedia squad table (`data_src/laliga_2026_27.txt`, source and date
 per club); no logos or photos. `python scripts/build_playground_data.py` rebuilds the data files.
+
+### Full match
+
+The **Full match** tab of the tactics board (`playground.html#match`) plays 2 x 45 minutes in the
+browser with `demo/sim.js`, one step per second of match time. Each team takes the shape of its
+formation and playing style (Possession, High press, Counter-attack, Direct, Wing play, Low block),
+shifted with the ball: pressers step out, forwards hold the offside line, wing-backs drop into a
+back five without the ball. The player on the ball picks a pass, through ball, carry, cross, shot or
+clearance by expected value: the gain on the same threat surface as the model against the risk of
+losing it. Shot xG comes from distance, pressure and bodies in the way. Live: score, possession,
+shots, xG, passes, accuracy, final-third entries, balls won high, goals and big chances.
+
+- **Best positions**: every 20 s of play the board runs the model's unit move (up to three players,
+  each within 5 m) on the live positions. At a break it draws your players at their average position,
+  with and without the ball, and an arrow to where the model kept wanting each of them.
+- **Second-half suggestion**: a Web Worker (`demo/sim-worker.js`) plays every formation x style for
+  your team (48 set-ups, six 45-minute halves each, the same seeds for all) against the opponent's
+  set-up, and lists the three with the best xG difference next to your current one, flagging when the
+  gap is within the simulation noise. One click applies it.
+
+It is a tactics toy, not a forecast: squads carry no ratings, so players are equal apart from the
+pace you set. Calibration (12 seeds, 4-3-3 vs 4-3-3): about 9 shots, 1.2 xG and 600 passes at 80 %
+accuracy per team per match. `node tests/sim_test.js` checks determinism, the two halves, the
+ranges and the search.
 
 The whole interface follows the device's light or dark setting (or the Auto / Light / Dark button).
 

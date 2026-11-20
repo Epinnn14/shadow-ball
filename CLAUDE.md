@@ -23,7 +23,7 @@ submitted file (sha256 c3eb7ed6…, 275 possessions): do not change v1-v4 / ball
 
 ```
 python run.py --game METRICA-2 cache|ball-predict|v4|reference|score|roles|tactics|offball|demo|serve
-python scripts/build_site.py --game METRICA-2   # static site/ (SB_STATIC: no /api, no print)
+python scripts/build_site.py --game METRICA-2   # website -> docs/ (replay with SB_STATIC: no /api)
 ```
 
 - `sb/paths.py` game catalog; `SB_GAME` must be set before importing `sb` (run.py does it from `--game`).
@@ -43,6 +43,10 @@ python scripts/build_site.py --game METRICA-2   # static site/ (SB_STATIC: no /a
 - Playground: demo/playground.html + playground.js, model in demo/model.js (same pitch control x threat
   as offball, tests/model_test.js), squads demo/laliga.js from data_src/laliga_2026_27.txt, threat
   surface demo/threat.js (mean of the 3 open games); `scripts/build_playground_data.py` rebuilds both.
+- Full match (playground tab, #match): demo/sim.js (SB_SIM: create/step/runHalf/setTeam/search, seeded,
+  no DOM, tests/sim_test.js), demo/sim-worker.js runs search() for the half-time suggestion. Six STYLES;
+  calibration harness idea: average 12+ seeded matches per matchup, aim ~9 shots, ~1.2 xG, ~80% passes.
+  Labelled a tactics toy: squads have no ratings. Best positions = model.simulate every 20 s of play.
 - UI "soft realism": light + dark tokens at the top of demo/style.css (dark under prefers-color-scheme
   and [data-theme]); demo/theme.js = Auto/Light/Dark toggle; canvas text off the pitch uses tok('--x').
 

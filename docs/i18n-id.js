@@ -460,7 +460,24 @@ window.SB_I18N_ID = {
 "forward": "ke depan",
 "back": "ke belakang",
 "to his right": "ke kanannya",
-"to his left": "ke kirinya"
+"to his left": "ke kirinya",
+"Every 20 seconds of play the model looks for the best moves for each team (each player within 5 m). At a break, with the layer on, the pitch shows the picked team at its average positions, with arrows to where the model kept wanting each player.": "Setiap 20 detik permainan model mencari gerakan terbaik untuk tiap tim (tiap pemain maksimal 5 m). Saat jeda, dengan lapisan aktif, lapangan menampilkan tim yang dipilih di posisi rata-ratanya, dengan panah ke tempat yang terus diinginkan model.",
+"Passing": "Umpan",
+"Finishing": "Penyelesaian",
+"Offsides": "Offside",
+"Substitutions": "Pergantian pemain",
+"Copy link": "Salin link",
+"Link copied": "Link tersalin",
+"Link to this set-up": "Link ke susunan ini",
+"Set-up now": "Susunan sekarang",
+"Sample game 1": "Contoh laga 1",
+"Sample game 2": "Contoh laga 2",
+"Sample game 3": "Contoh laga 3",
+"Pace scales his top speed (1.00× = 5 m/s) in the model and the match. Passing changes how often his passes arrive, finishing how often his shots go in; both count in the full match only. Squads carry no ratings, so everyone starts at 1.00×: rate the players yourself.": "Kecepatan mengatur laju maksimalnya (1.00× = 5 m/s) di model dan di laga. Umpan mengatur seberapa sering umpannya sampai, penyelesaian seberapa sering tembakannya masuk; keduanya hanya dipakai di laga penuh. Skuad tidak punya rating, jadi semua mulai dari 1.00×: beri rating sendiri.",
+"At half time the board plays every formation and style for the team you pick against the other set-up, and suggests what fits best.": "Saat turun minum papan memainkan setiap formasi dan gaya untuk tim yang Anda pilih melawan susunan lawan, lalu menyarankan yang paling cocok.",
+"No player the model kept wanting somewhere else: the shape held up in this phase.": "Tidak ada pemain yang terus diminta model pindah: bentuk tim bertahan di fase ini.",
+"The current set-up is within the simulation noise of the best one.": "Susunan sekarang masih dalam batas acak simulasi dari yang terbaik.",
+"Players count as rated on their cards (1.00× unless you change it).": "Pemain dihitung sesuai rating di kartunya (1.00× kecuali Anda ubah)."
 },
 "patterns": [
 [
@@ -902,6 +919,30 @@ window.SB_I18N_ID = {
 [
 "(Possession|High press|Counter-attack|Direct|Wing play|Low block) (\\d-[\\d-]+) against (Possession|High press|Counter-attack|Direct|Wing play|Low block) (\\d-[\\d-]+)\\.",
 "$1 $2 melawan $3 $4."
+],
+[
+"Find the best set-up for (.+)",
+"Cari susunan terbaik untuk $1"
+],
+[
+"No substitutions left: (\\d+) used\\.",
+"Jatah pergantian habis: $1 sudah dipakai."
+],
+[
+"(.+) are behind, so chances made count more than chances given away\\.",
+"$1 tertinggal, jadi peluang yang dibuat dihitung lebih berat daripada peluang yang diberikan."
+],
+[
+"(.+) are ahead, so chances given away count more than chances made\\.",
+"$1 unggul, jadi peluang yang diberikan dihitung lebih berat daripada peluang yang dibuat."
+],
+[
+"Substitution · (.+) on for (.+) \\((.+)\\)",
+"Pergantian · $1 masuk menggantikan $2 ($3)"
+],
+[
+"xG difference per half ([+−][\\d.]+) \\((.+) ([\\d.]+), (.+) ([\\d.]+)\\)",
+"Selisih xG per babak $1 ($2 $3, $4 $5)"
 ]
 ]
 };

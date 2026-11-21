@@ -55,7 +55,7 @@
     }
     B.begin = () => {
       g.setTransform(view.d, 0, 0, view.d, 0, 0); g.clearRect(0, 0, view.w, view.h);
-      if (!grass) grass = grassCanvas(); g.drawImage(grass, 0, 0, view.w, view.h);
+      if (!grass) grass = grassCanvas(); if (grass.width && grass.height) g.drawImage(grass, 0, 0, view.w, view.h);   // a hidden page has no size yet
     };
     // dangerous space: one pixel per model cell, scaled up with smoothing so it reads as a glow
     B.space = (danger, cell, kH, kA) => {

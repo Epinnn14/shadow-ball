@@ -39,6 +39,10 @@ def main():
     for name in ASSETS:
         shutil.copy(os.path.join(REPO, "demo", name), os.path.join(args.out, name))
     shutil.copy(clip, os.path.join(args.out, "data", "clip.json"))
+    for n in ("1", "2", "3"):                            # the other open games, for replay.html?game=N
+        other = os.path.join(REPO, "exports", "metrica-" + n, "demo", "clip.json")
+        if os.path.exists(other) and "METRICA-" + n != game:
+            shutil.copy(other, os.path.join(args.out, "data", "clip-{}.json".format(n)))
     for name in PAGES:
         with open(os.path.join(REPO, "demo", name), encoding="utf-8") as handle:
             html = handle.read()

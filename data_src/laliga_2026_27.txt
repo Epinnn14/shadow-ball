@@ -27,7 +27,7 @@
 34;FW;Aitor Mañas
 35;DF;Xanet Oláiz
 36;DF;Paco Sanz
-## Athletic|Athletic Club|https://en.wikipedia.org/wiki/Athletic_Bilbao|not stated|#D52B1E|#FFFFFF
+## Athletic|Athletic Club|https://en.wikipedia.org/wiki/Athletic_Bilbao|read 21 November 2026 (no date on the page)|#D52B1E|#FFFFFF
 1;GK;Unai Simón
 2;DF;Andoni Gorosabel
 3;DF;Dani Vivian
@@ -52,12 +52,13 @@
 23;FW;Robert Navarro
 24;MF;Beñat Prados
 25;FW;Urko Izeta
-26;GK;Mikel Santos
 27;GK;Álex Padilla
-28;DF;Aimar Duñabeitia
 30;MF;Alejandro Rego
 31;FW;Asier Hierro
-33;FW;Adrián Pérez
+35;MF;Ibon Sánchez
+44;MF;Selton Sánchez
+47;DF;Iker Monreal
+49;MF;Eder García
 ## Atlético Madrid|Atlético de Madrid|https://en.wikipedia.org/wiki/Atl%C3%A9tico_Madrid|2 September 2026|#CB3524|#1B3A6B
 1;GK;Juan Musso
 3;MF;Obed Vargas
@@ -86,30 +87,34 @@
 29;FW;Miguel Cubo
 30;DF;Dani Martínez
 46;MF;Jorge Castillo
-## Barcelona|FC Barcelona|https://www.fcbarcelona.com/en/news/4564872/the-squad-for-elche|23 August 2026 (matchday squad; numbers not published there)|#A50044|#004D98
--;GK;Joan Garcia
--;GK;Wojciech Szczęsny
--;GK;Eder Aller
--;DF;João Cancelo
--;DF;Pau Cubarsí
--;DF;Andreas Christensen
--;DF;Gerard Martín
--;DF;Jules Koundé
--;DF;Eric García
--;DF;Álvaro Cortés
--;DF;Xavi Espart
--;MF;Pesquer
--;MF;Gavi
--;MF;Fermín López
--;MF;Pedri
--;MF;Dani Olmo
--;MF;Marc Bernal
--;FW;Brian Fariñas
--;FW;Lamine Yamal
--;FW;Raphinha
--;FW;Karim Adeyemi
--;FW;Anthony Gordon
--;FW;Hamza Abdelkarim
+## Barcelona|FC Barcelona|https://www.fcbarcelona.com/en/news/4570894/202627-first-team-jersey-numbers-confirmed|2 September 2026|#A50044|#004D98
+1;GK;Joan Garcia
+2;DF;João Cancelo
+3;DF;Alejandro Balde
+4;MF;Brian Fariñas
+5;DF;Pau Cubarsí
+6;MF;Gavi
+7;MF;Fermín López
+8;MF;Pedri
+9;FW;Gabriel Jesus
+10;FW;Lamine Yamal
+11;FW;Raphinha
+12;DF;Xavi Espart
+13;GK;Wojciech Szczęsny
+14;FW;Karim Adeyemi
+15;DF;Andreas Christensen
+16;MF;Rodrigo
+17;FW;Anthony Gordon
+18;DF;Gerard Martín
+19;FW;Roony Bardghji
+20;MF;Dani Olmo
+21;MF;Frenkie de Jong
+22;MF;Marc Bernal
+23;DF;Jules Koundé
+24;DF;Eric García
+25;GK;Dominik Livaković
+27;FW;Jesse Bisiwu
+29;FW;Hamza Abdelkarim
 ## Betis|Real Betis|https://en.wikipedia.org/wiki/Real_Betis|1 September 2026|#00954C|#FFFFFF
 1;GK;Álvaro Valles
 2;DF;Héctor Bellerín
@@ -165,12 +170,13 @@
 25;GK;Iván Villar
 27;DF;Quique Ribes
 28;MF;Andrés Antañón
-## Deportivo|Deportivo de La Coruña|https://en.wikipedia.org/wiki/Deportivo_de_A_Coru%C3%B1a|5 September 2025 (page date; may be out of date)|#1A5FB4|#FFFFFF
+## Deportivo|Deportivo de La Coruña|https://en.wikipedia.org/wiki/Deportivo_de_A_Coru%C3%B1a|16 September 2026|#1A5FB4|#FFFFFF
 1;GK;Germán Parreño
 2;DF;Adrià Altimira
 3;DF;Arnau Comas
 4;DF;Lucas Noubi
 5;DF;Dani Barcia
+6;MF;Marc Casadó
 7;FW;Pierre-Emerick Aubameyang
 8;MF;Diego Villares
 9;FW;Zakaria Eddahchouri
@@ -181,14 +187,17 @@
 14;MF;Riki Rodríguez
 15;DF;Miguel Loureiro
 16;MF;Lorenzo Amatucci
+17;DF;Angeliño
 18;MF;Jonathan Asp Jensen
 19;FW;Luismi Cruz
+20;DF;José María Giménez
 21;MF;Mario Soriano
 22;DF;Bright Ede
 23;DF;Ximo Navarro
 24;FW;Adama Traoré
 25;GK;Álvaro Fernández
-## Elche|Elche CF|https://en.wikipedia.org/wiki/Elche_CF|18 August 2025 (page date; may be out of date)|#0B7A3E|#FFFFFF
+32;FW;Bil Nsongo
+## Elche|Elche CF|https://en.wikipedia.org/wiki/Elche_CF|31 August 2026|#0B7A3E|#FFFFFF
 1;GK;Matías Dituro
 2;DF;Buba Sangaré
 4;DF;Bambo Diaby
@@ -197,6 +206,7 @@
 7;MF;Yago Santiago
 8;MF;Marc Aguado
 9;FW;Ezequiel Ponce
+10;MF;Facundo Buonanotte
 11;MF;Germán Valera
 12;MF;Gonzalo Villar
 14;FW;Fer Niño
@@ -210,7 +220,9 @@
 24;FW;Abiel Osorio
 26;DF;Matía Barzić
 29;MF;Ali Houary
+32;MF;Adam Boayar
 43;GK;Alejandro Iturbe
+47;MF;Javi Morcillo
 ## Espanyol|RCD Espanyol|https://en.wikipedia.org/wiki/RCD_Espanyol|2 September 2026|#0072CE|#FFFFFF
 1;GK;Ángel Fortuño
 4;MF;Urko González de Zárate
@@ -234,7 +246,7 @@
 28;FW;Javi Hernández
 31;GK;Llorenç Serred
 32;DF;José Ángel López
-## Getafe|Getafe CF|https://en.wikipedia.org/wiki/Getafe_CF|17 August 2025 (page date; may be out of date)|#005999|#FFFFFF
+## Getafe|Getafe CF|https://en.wikipedia.org/wiki/Getafe_CF|13 October 2026|#005999|#FFFFFF
 1;GK;Jiří Letáček
 2;DF;Dakonam Djené
 3;DF;Davinchi
@@ -253,31 +265,51 @@
 17;DF;Kiko Femenía
 18;MF;Christantus Uche
 19;FW;Enes Ünal
+20;FW;Iván Azón
+21;DF;Andrés García
 22;DF;Johan Mojica
+23;MF;Orel Mangala
 24;DF;Zaid Romero
+26;DF;Jean Ives Valou
 27;FW;Ebrahima Drammeh
 28;MF;Alberto Risco
-## Levante|Levante UD|https://en.wikipedia.org/wiki/Levante_UD|20 December 2025 (page date; may be out of date)|#004B93|#B4053F
+29;DF;Curro Burgos
+30;MF;Óscar López
+31;DF;Moha Hamdoune
+32;FW;Joselu Pérez
+33;FW;Moha Achraf
+34;MF;Jesús Martínez
+35;GK;Diego Ferrer
+## Levante|Levante UD|https://en.wikipedia.org/wiki/Levante_UD|7 September 2026|#004B93|#B4053F
 1;GK;Pablo Campos
 2;DF;Aïssa Mandi
+3;DF;Ifeanyi Ndukwe
 4;DF;Adrián Dela
+5;MF;Hugo Sotelo
+6;MF;Dani Requena
 7;FW;Roger Brugué
 8;MF;Jon Ander Olasagasti
 9;FW;Iván Romero
+10;FW;Petar Ratkov
 11;FW;Yanis Musuayi
 13;GK;Mathew Ryan
 14;DF;Jorge Cabello
+16;MF;Axel Tape
 17;DF;Víctor García
 18;MF;Enzo Bardeli
 20;MF;Oriol Rey
 21;FW;Karl Etta Eyong
 22;DF;Jeremy Toljan
+23;DF;Manu Sánchez
+24;MF;Thiago Fernández
 27;MF;Paco Cortés
 29;DF;Nacho Pérez
+32;GK;Álex Primo
 33;DF;Marc Santos
 34;MF;Manel Usedo
+36;GK;Igor Galdin
 38;MF;Alberto Calatrava
-## Málaga|Málaga CF|https://en.wikipedia.org/wiki/M%C3%A1laga_CF|24 November 2025 (page date; may be out of date)|#5BA4DB|#FFFFFF
+## Málaga|Málaga CF|https://en.wikipedia.org/wiki/M%C3%A1laga_CF|30 June 2026|#5BA4DB|#FFFFFF
 1;GK;Alfonso Herrero
 3;DF;Carlos Puga
 4;DF;Einar Galilea
@@ -297,7 +329,14 @@
 22;MF;Dani Lorenzo
 23;MF;Izan Merino
 24;MF;Julen Lobete
+26;MF;Pablo Arriaza
+29;GK;Álex Mateos
+30;GK;Andrés Céspedes
 31;DF;Rafita
+35;MF;Aarón Ochoa
+36;DF;Ángel Recio
+37;MF;Rafa
+-;DF;Álex Pastor
 ## Osasuna|CA Osasuna|https://en.wikipedia.org/wiki/CA_Osasuna|14 June 2026|#D91A21|#0A2240
 1;GK;Sergio Herrera
 5;DF;Jorge Herrando
@@ -341,7 +380,7 @@
 22;DF;Pedro Felipe
 23;MF;Iván Martín
 30;DF;Carlos Sánchez
-## Rayo|Rayo Vallecano|https://en.wikipedia.org/wiki/Rayo_Vallecano|September 2022 (stamp on page; list may be out of date)|#FFFFFF|#E30613
+## Rayo|Rayo Vallecano|https://en.wikipedia.org/wiki/Rayo_Vallecano|1 July 2026|#FFFFFF|#E30613
 1;GK;Dani Cárdenas
 2;DF;Andrei Rațiu
 3;DF;Pep Chavarría
@@ -352,7 +391,10 @@
 9;FW;Alemão
 10;FW;Sergio Camello
 11;FW;Randy Nteka
+12;MF;Ilias Akhomach
 13;GK;Augusto Batalla
+14;FW;Carlos Martín
+15;MF;Gerard Gumbau
 17;MF;Unai López
 18;MF;Álvaro García
 19;FW;Jorge de Frutos
@@ -362,7 +404,13 @@
 24;DF;Florian Lejeune
 26;DF;Marco de las Sías
 27;DF;Sergio Lozano
+28;MF;Samu Becerra
 29;MF;Diego Méndez
+30;GK;Juanpe Gil
+31;MF;Marco Román
+32;DF;Nobel Mendy
+33;DF;Jozhua Vertrouwd
+40;GK;Adrián Molina
 ## Real Madrid|Real Madrid CF|https://www.realmadrid.com/en-US/news/football/first-team/latest-news/dorsales-del-real-madrid-para-la-temporada-2026-27-10-08-2026|10 August 2026|#F5F5F5|#2B2E83
 1;GK;Thibaut Courtois
 13;GK;Andriy Lunin

@@ -24,6 +24,9 @@
   const S = { t: 0, playing: false, speed: 1, team: 'H', sel: null, follow: false,
               layers: { names: true }, seen: new Set(), feedKey: '' };
   let lineup = null, roleToPlayer = {};
+  // short team name for cards: the first word ("Athletic Club" -> "Athletic"), but "Team B" stays whole
+  const shortTeam = (n) => (/^Team\s/.test(n) ? n : n.split(' ')[0]);
+  const oppShort = () => shortTeam(lineup.oppName || meta.teams.A);
 
   // ================================================================== load
   // replay.html#own: the viewer opens a clip.json from their own computer (read locally, never uploaded)
@@ -36,8 +39,14 @@
     };
   }) : null;
   window.addEventListener('hashchange', () => location.reload());
+  // three open Metrica sample games: replay.html?game=1|2|3 (2 is the default)
+  const GAME = ['1', '2', '3'].includes(new URLSearchParams(location.search).get('game')) ? new URLSearchParams(location.search).get('game') : '2';
+  if ($('gamePick')) {
+    $('gamePick').value = GAME; $('gamePick').hidden = !!ownClip || !window.SB_STATIC;
+    $('gamePick').onchange = (e) => { location.search = '?game=' + e.target.value; };
+  }
   Promise.all([
-    ownClip || fetch('data/clip.json').then((r) => { if (!r.ok) throw new Error('No clip.json yet: run python run.py demo'); return r.json(); }),
+    ownClip || fetch(GAME === '2' ? 'data/clip.json' : `data/clip-${GAME}.json`).then((r) => { if (!r.ok) throw new Error('No clip.json yet: run python run.py demo'); return r.json(); }),
     api('api/lineup', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : { lineup: null })).catch(() => ({ lineup: null })),
   ]).then(([clip, saved]) => init(clip, saved.lineup)).catch((e) => { $('loading').textContent = e.message; });
 
@@ -277,7 +286,7 @@
     if (lineup.opp) for (const [role, slot] of Object.entries(roleToSlot.A)) { const p = lineup.opp.xi[slot]; if (p && p.name) oppToPlayer[role] = Object.assign({ slot }, p); }
     $('match').textContent = `${meta.teams.H} – ${lineup.oppName || meta.teams.A} · ${lineup.formation} vs ${meta.formation.A}`;
     $('match').dataset.score = '';
-    $('tabA').textContent = (lineup.oppName || meta.teams.A).split(' ')[0];
+    $('tabA').textContent = oppShort();
     $('tabH').textContent = meta.teams.H;
     advCache = -1; heatCache = ''; luKey = '';
   }
@@ -327,7 +336,7 @@
       team === 'H' ? 'Click a position, then pick the player (or type a new name)' : 'Optional: name their players so the live screens use names instead of positions';
     $('stepBtn').textContent = stepMode ? 'Stop' : 'Fill one by one';
     document.querySelectorAll('#setupTabs button').forEach((b) => b.classList.toggle('on', b.dataset.t === team));
-    $('setupThem').textContent = lineup.opp && Object.keys(lineup.opp.xi).length ? (lineup.oppName || meta.teams.A).split(' ')[0] : 'Opponent (optional)';
+    $('setupThem').textContent = lineup.opp && Object.keys(lineup.opp.xi).length ? oppShort() : 'Opponent (optional)';
     // right column: the picker for the selected position; the squad (us) or the paste box (them)
     renderPicker();
     $('oppPaste').hidden = team !== 'A';
@@ -752,7 +761,7 @@
     return parts.join(', ') || 'hold';
   }
   const pctM = (permille) => Math.round(permille / 10) + '%';
-  const nameFor = (team, role) => (team === 'H' ? nameOf(role) : oppToPlayer[role] ? shortName(oppToPlayer[role]) : `${(lineup.oppName || meta.teams.A).split(' ')[0]} ${role}`);
+  const nameFor = (team, role) => (team === 'H' ? nameOf(role) : oppToPlayer[role] ? shortName(oppToPlayer[role]) : `${oppShort()} ${role}`);
   const moveColor = (m) => (m.kind === 'cover' ? COL.warn : COL.shadow);
 
   // the model's control (same as sb/offball.py, players standing) x threat, painted per 3 m cell.
@@ -885,7 +894,7 @@
     replay = { m, start: performance.now(), until: performance.now() + 7000 };
     $('shadowCard').classList.add('replay');
     if (narrow()) shV.layout($('shadowPitch').parentElement.clientWidth);
-    const [entry, low, team, value, , kind] = m, opp = (lineup.oppName || meta.teams.A).split(' ')[0];
+    const [entry, low, team, value, , kind] = m, opp = oppShort();
     const moves = momentMoves(m), ours = team === 'H', rest = kind === 'rest';
     $('shReplay').hidden = false; $('shCalm').hidden = true; $('shWarn').hidden = true;
     $('shReplayAt').textContent = clockText(low);
@@ -1001,7 +1010,7 @@
         v.label(s.kind === 'leak' && s.db >= 0.03 ? `box ${pctR(s.boxP)} · ${pctR(s.boxH)}` : `n ${s.np} · ${s.nh}`, cx, cy, 9, { size: 9, pill: false, color: 'rgba(255,255,255,.7)' });
       } else v.label('few', cx, cy, 0, { size: 9, pill: false, color: 'rgba(255,255,255,.45)' });
     }
-    const opp = (lineup.oppName || meta.teams.A).split(' ')[0], who = pressTeam === 'H' ? 'we' : opp;
+    const opp = oppShort(), who = pressTeam === 'H' ? 'we' : opp;
     const bands = pressBands(f, pressTeam).filter((b) => b.ok);
     const best = bands.slice().sort((a, b) => (b.regP - b.regH) - (a.regP - a.regH))[0];
     const worst = bands.slice().sort((a, b) => ((a.regP - a.regH) - 2 * (a.boxP - a.boxH)) - ((b.regP - b.regH) - 2 * (b.boxP - b.boxH)))[0];
@@ -1100,7 +1109,7 @@
     };
     const avgH = team('H'), avgA = team('A');
     const tag = (name, avg) => `${esc(name)}${avg != null ? `<em style="background:${rateColor(avg)}">${avg.toFixed(1)}</em>` : ''}`;
-    $('luTop').innerHTML = tag(opp.split(' ')[0], avgA); $('luBot').innerHTML = tag(meta.teams.H, avgH);
+    $('luTop').innerHTML = tag(shortTeam(opp), avgA); $('luBot').innerHTML = tag(meta.teams.H, avgH);
     $('luLive').innerHTML = html.join('');
   }
 
@@ -1396,7 +1405,7 @@
   }
   const ZONE = { 'defensive third': 'our third', 'middle third': 'midfield', 'final third': 'the final third' };
   function eventView(e) {
-    const opp = (lineup.oppName || meta.teams.A).split(' ')[0];
+    const opp = oppShort();
     if (e.kind === 'shadow') {
       const mv = momentMoves(e.m)[0], rest = e.m[5] === 'rest';
       if (e.team === 'H') return rest
@@ -1559,7 +1568,7 @@
     });
     draw('H', 58, 92, lineup.kitH); draw('A', 47, 13, lineup.kitA);
     const ko = keyOpponent(st, Math.max(0, Math.floor(S.t)));
-    const opp = (lineup.oppName || meta.teams.A).split(' ')[0];
+    const opp = oppShort();
     note.innerHTML = `Arrows = entries into the final third (right: us, left: ${esc(opp)}).` +
       (ko && ko.score > 30 ? ` Watch <b>${esc(opp)} ${ko.role}</b>: ${Math.round(ko.frac * 100)}% of his time near our goal, ${ko.spr} sprints in the last 10 min.` : '');
     S.keyOpp = ko;
@@ -1567,7 +1576,7 @@
 
   // The three things to know right now, ranked. Each comes from a module above.
   function priorities(f, st, si) {
-    const items = [], opp = (lineup.oppName || meta.teams.A).split(' ')[0];
+    const items = [], opp = oppShort();
     const fat = latestStamina(f);
     const red = Object.values(fat).filter((r) => r.team === 'H' && r.half === meta.half && r.level === 'red').sort((a, b) => b.risk - a.risk);
     const bestSub = S.subsShown && red.length && S.subsShown.for_role === red[0].label ? S.subsShown.candidates[0] : null;
@@ -1651,7 +1660,7 @@
       g.fillStyle = hexA(col, kind === 'freekick' ? 0.55 : 0.95); g.fill();
       if (box) { g.lineWidth = 2; g.strokeStyle = '#fff'; g.stroke(); }
     }
-    const opp = (lineup.oppName || meta.teams.A).split(' ')[0];
+    const opp = oppShort();
     const line = (k) => `<tr><td>${SP_NAMES[k]}</td><td>${out.H[k] || 0}</td><td>${out.A[k] || 0}</td></tr>`;
     const pct = (k) => (k[1] ? Math.round(k[0] / k[1] * 100) + '%' : '–');
     el.innerHTML = `<table class="mini"><thead><tr><th></th><th>${esc(meta.teams.H)}</th><th>${esc(opp)}</th></tr></thead><tbody>
@@ -1703,7 +1712,7 @@
       v.label(nameOf(dl.def), dl.d[0], dl.d[1], 15, { size: 10 });
       v.label(dl.att, dl.a[0], dl.a[1], -15, { size: 10, color: '#FFE1D8' });
     }
-    const opp = (lineup.oppName || meta.teams.A).split(' ')[0];
+    const opp = oppShort();
     el.innerHTML = S.duels.length ? S.duels.sort((a, b) => b.danger - a.danger).map((dl) => `<div class="duel">
         <i style="background:${color(dl.danger)}"></i><b>${esc(nameOf(dl.def))}</b><span>vs ${dl.att} ${esc(opp)}</span>
         <em>goal-side ${Math.round(dl.behind * 100)}%${dl.races >= 5 ? ` · races lost ${dl.lost}/${dl.races}` : ''}</em></div>`).join('')
@@ -1779,7 +1788,7 @@
     ['Sprints', (s) => s.sprints || '–'],
   ];
   function statsTable(f) {
-    const m = matchStats(f), opp1 = (lineup.oppName || meta.teams.A).split(' ')[0], live = meta.half === 2;
+    const m = matchStats(f), opp1 = oppShort(), live = meta.half === 2;
     const head = (t) => `<th>${esc(meta.teams.H)}</th><th>${esc(opp1)}</th>`;
     const cell = (grp, fn, bold) => { const a = fn(grp.H, grp.A), b = fn(grp.A, grp.H); return `<td${bold ? ' class="b"' : ''}>${a}</td><td${bold ? ' class="b"' : ''}>${b}</td>`; };
     return `<table class="mstats"><thead>
@@ -1905,7 +1914,7 @@
     }
     g.textAlign = 'left'; g.font = `600 11px ${CSS.getPropertyValue('--sans')}`;
     g.fillStyle = lineup.kitH; g.fillText(`${meta.teams.H} defending`, x0 + 6, y0 + 6);
-    g.fillStyle = lineup.kitA; g.fillText(`${(lineup.oppName || meta.teams.A).split(' ')[0]} defending`, x0 + 150, y0 + 6);
+    g.fillStyle = lineup.kitA; g.fillText(`${oppShort()} defending`, x0 + 150, y0 + 6);
   }
 
   // ================================================================== Plan B + Player Recommender
@@ -2130,7 +2139,7 @@
     $('clock').textContent = clockText(st.frame);
     const sc = score(st.frame), scTxt = `${meta.teams.H} ${sc.H}–${sc.A} ${(lineup.oppName || meta.teams.A)}`;
     if ($('match').dataset.score !== scTxt) { $('match').dataset.score = scTxt; $('match').innerHTML = `<b>${esc(scTxt)}</b> · ${lineup.formation} vs ${meta.formation.A}`; }
-    const pe = $('poss'), opp = (lineup.oppName || meta.teams.A).split(' ')[0];
+    const pe = $('poss'), opp = oppShort();
     pe.innerHTML = st.poss === 'D' ? '<i style="background:#6B7280"></i>Dead ball'
       : `<i style="background:${st.poss === 'H' ? lineup.kitH : lineup.kitA}"></i>${st.poss === 'H' ? meta.teams.H : opp}`;
     const half = Math.floor(S.t * 2) / 2;

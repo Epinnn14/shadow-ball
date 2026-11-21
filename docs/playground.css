@@ -100,3 +100,8 @@ body.pg:not(.mode-match) .x-only, body.pg.mode-match .m-only { display: none !im
   .pg-score { margin-left: 0; width: 100%; justify-content: space-between; }
   .pg-tools.x-only .primary { width: auto; flex: 1; }
 }
+
+.pg-for { width: 100%; } .pg-for button { flex: 1; min-height: 40px; font-size: 13px; }
+.pg-link { flex: 1 1 220px; min-width: 0; min-height: 40px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--s2); color: var(--text); font: 12px var(--mono); }
+.pg-link[hidden] { display: none; }
+.pg-events li.sub span { color: var(--muted); }

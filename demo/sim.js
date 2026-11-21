@@ -46,7 +46,7 @@
     const threat = (xt, yt) => surf[clamp(Math.floor(xt / cell), 0, nx - 1)][clamp(Math.floor(yt / cell), 0, ny - 1)];
     const S = { t: 0, half: 1, clock: 0, dead: 0, restart: null, ball: { x: L / 2, y: W / 2, owner: -1, fly: null }, poss: 'H',
                 players: [], events: [], stats: { H: blank(), A: blank() }, teams: {}, decide: 0, lastWin: -99, ended: false, track: null };
-    function blank() { return { poss: 0, passes: 0, completed: 0, shots: 0, onTarget: 0, xg: 0, goals: 0, entries: 0, regainsHigh: 0, crosses: 0, corners: 0, tackles: 0, fouls: 0 }; }
+    function blank() { return { poss: 0, passes: 0, completed: 0, shots: 0, onTarget: 0, xg: 0, goals: 0, entries: 0, regainsHigh: 0, crosses: 0, corners: 0, tackles: 0, fouls: 0, offsides: 0, subs: 0 }; }
 
     // team frame: x = distance from own goal, y = width from the team's left
     const tx = (team, x) => (team === 'H' ? x : L - x);
@@ -59,10 +59,19 @@
       const slots = slotsOf(cfg.formation);
       const old = S.players.filter((p) => p.team === team);
       S.players = S.players.filter((p) => p.team !== team);
+      const before = new Map(old.map((p) => [p.name, p]));
+      const incoming = new Set(slots.map((x) => (cfg.names && cfg.names[x.label]) || x.label));
       slots.forEach((s, i) => {
-        const prev = old[i];
-        S.players.push({ team, role: s.label, sx: s.x, sy: s.y, x: prev ? prev.x : L / 2, y: prev ? prev.y : W / 2,
-                         pace: (cfg.pace && cfg.pace[s.label]) || 1, name: (cfg.names && cfg.names[s.label]) || s.label });
+        const prev = old[i], name = (cfg.names && cfg.names[s.label]) || s.label, same = before.get(name);
+        const on = same ? same.on : S.clock;                     // a player new to the pitch starts fresh
+        if (old.length && !same && S.clock > 0 && cfg.names && cfg.names[s.label]) {   // a substitution (named players only)
+          const off = old.find((p) => !incoming.has(p.name) && !p.subbed);
+          if (off) off.subbed = true;
+          S.stats[team].subs += 1; log('sub', team, { who: name, off: off ? off.name : '', role: s.label });
+        }
+        S.players.push({ team, role: s.label, sx: s.x, sy: s.y, x: prev ? prev.x : L / 2, y: prev ? prev.y : W / 2, on,
+                         pace: (cfg.pace && cfg.pace[s.label]) || 1, pas: (cfg.passing && cfg.passing[s.label]) || 1,
+                         fin: (cfg.finishing && cfg.finishing[s.label]) || 1, name });
       });
       S.players.sort((a, b) => (a.team === b.team ? 0 : a.team === 'H' ? -1 : 1));
       S.ball.owner = -1;
@@ -99,7 +108,7 @@
     function move(p, x, y, dt, sprint) {
       const dx = x - p.x, dy = y - p.y, d = Math.hypot(dx, dy);
       if (d < 1e-3) return;
-      const fat = 1 - 0.07 * (S.clock / 5400);
+      const fat = 1 - (S.teams[p.team].st.pressers > 1 ? 0.11 : 0.07) * Math.max(0, S.clock - (p.on || 0)) / 5400;   // tiring; a substitute starts fresh
       const v = (sprint || d > 6 ? 7.0 : 4.2) * p.pace * fat * dt;
       const k = Math.min(1, v / d); p.x += dx * k; p.y += dy * k;
     }
@@ -143,7 +152,7 @@
         if (r.role === 'GK' && cxT > 45) return;
         if (tx(team, r.x) > off + 0.5) return;                       // offside
         const lane = laneDist(team, c.x, c.y, r.x, r.y), [rp] = nearestOpp(team, r.x, r.y), fwd = tx(team, r.x) - cxT;
-        const z = 2.6 - 0.058 * d + 0.28 * Math.min(rp, 7) - 3.2 * Math.exp(-lane / 2.0) - 0.8 * Math.exp(-press / 1.5) - (fwd > 15 ? 0.4 : 0);
+        const z = 2.6 + 2.5 * (c.pas - 1) - 0.058 * d + 0.28 * Math.min(rp, 7) - 3.2 * Math.exp(-lane / 2.0) - 0.8 * Math.exp(-press / 1.5) - (fwd > 15 ? 0.4 : 0);
         const p = sig(z), gain = threat(tx(team, r.x), ty(team, r.y)) - here;
         const v = p * (Math.max(gain, -0.025) + 0.012 * st.safety) - (1 - p) * lossCost * (0.6 + 0.4 * st.safety) + st.direct * 0.0009 * fwd;   // keeping the ball has value: recycling costs little
         opts.push({ kind: 'pass', j, p, v, d });
@@ -158,7 +167,7 @@
         if (d > 65) return;
         const [dd] = nearestOpp(team, X, Y), race = dd - Math.hypot(X - r.x, Y - r.y) * 0.95;
         const lane = laneDist(team, c.x, c.y, X, Y);
-        const p = Math.min(0.55, sig(0.35 * race - 0.04 * d + 0.2 - 2.5 * Math.exp(-lane / 2.0)));
+        const p = Math.min(0.6, sig(0.35 * race + 2.5 * (c.pas - 1) - 0.04 * d + 0.2 - 2.5 * Math.exp(-lane / 2.0)));
         const gain = threat(txT, tyT) - here;
         const v = p * (gain + 0.01) - (1 - p) * lossCost * 0.8 + st.direct * 0.0012 * (txT - cxT) + (press < 3 && cxT < 40 ? 0.02 : 0);
         opts.push({ kind: 'through', j, p, v, d, X, Y });
@@ -179,7 +188,7 @@
       // cross from wide areas of the final third
       if (cxT > L - 28 && (cyT < 16 || cyT > W - 16)) {
         const inBox = S.players.filter((q) => q.team === team && tx(team, q.x) > L - 17 && Math.abs(ty(team, q.y) - W / 2) < 20).length;
-        opts.push({ kind: 'cross', inBox, v: (0.05 + 0.03 * inBox) * 0.35 * (0.6 + 0.4 * st.cross) - 0.02 + 0.01 * st.cross });
+        opts.push({ kind: 'cross', inBox, v: (0.05 + 0.03 * inBox) * 0.35 * (0.6 + 0.4 * st.cross) + 0.004 + 0.014 * st.cross });
       }
       let best = null;
       for (const o of opts) { const s = o.v + (R() - 0.5) * 0.02; if (!best || s > best.s) best = Object.assign({ s }, o); }
@@ -218,13 +227,13 @@
 
       st.shots += 1; st.xg += xg;
       const onT = R() < 0.3 + 0.9 * xg; if (onT) st.onTarget += 1;
-      const goal = onT && R() < Math.min(0.95, xg / (0.3 + 0.9 * xg));
+      const goal = onT && R() < Math.min(0.95, xg * c.fin / (0.3 + 0.9 * xg));
       if (goal) {
         st.goals += 1; log('goal', team, { who: c.name, role: c.role, xg, src: src || 'open' });
         stopPlay('kickoff', other(team), L / 2, W / 2, 45);
       } else {
         log(xg > 0.25 ? 'chance' : 'shot', team, { who: c.name, role: c.role, xg, src: src || 'open' });
-        if (onT && R() < 0.35) { S.stats[team].corners += 1; stopPlay('corner', team, team === 'H' ? L - 0.5 : 0.5, R() < 0.5 ? 0.5 : W - 0.5, 18); }
+        if (R() < (onT ? 0.4 : 0.3)) { S.stats[team].corners += 1; stopPlay('corner', team, team === 'H' ? L - 0.5 : 0.5, R() < 0.5 ? 0.5 : W - 0.5, 18); }
         else stopPlay('goalkick', other(team), team === 'H' ? L - 6 : 6, W / 2, 22);
       }
     }
@@ -318,7 +327,7 @@
       const c = S.players[b.owner], team = c.team, gx = team === 'H' ? L - 2 : 2;
       const [press, presser] = nearestOpp(team, c.x, c.y);
       if (press < 1.6) {                           // duel: a tackle, a foul, or the carrier holds on
-        const q = S.players[presser], pt = 0.025 + 0.045 * S.teams[q.team].st.tackle, u = R();
+        const q = S.players[presser], pt = 0.016 + 0.032 * S.teams[q.team].st.tackle, u = R();
         if (u < pt * dt) { S.stats[q.team].tackles += 1; giveBall(presser, 'won'); endCheck(); return; }
         if (u < (pt + 0.016) * dt) {
           S.stats[q.team].fouls += 1; log('foul', q.team, { who: q.name });
@@ -342,6 +351,10 @@
           b.fly = { team, j: a.j, ok, x: clamp(x, -1, L + 1), y: clamp(y, -1, W + 1), left: Math.max(1, a.d / (a.d > 30 ? 20 : 15)), from: c.x };
           b.owner = -2;
         } else if (a.kind === 'through') {
+          if (R() < 0.035) {                                    // the runner went too early
+            S.stats[team].offsides += 1; S.stats[team].passes += 1; log('offside', team, { who: S.players[a.j].name });
+            stopPlay('freekick', other(team), S.players[a.j].x, S.players[a.j].y, 14); endCheck(); return;
+          }
           const ok = R() < a.p; S.stats[team].passes += 1;
           b.fly = { team, j: a.j, ok, x: clamp(a.X, -1, L + 1), y: clamp(a.Y, -1, W + 1), left: Math.max(1.2, a.d / 17), from: c.x };
           b.owner = -2;
@@ -368,23 +381,29 @@
 
   // Search: which formation + style of team H plays the opponent best over a 45-minute half?
   // Common random numbers: every setup sees the same seeds. Returns setups sorted by mean xG difference.
+  // Search: which formation + style for one side (opts.side, default H) against the other's set-up?
+  // Plays opts.runs halves per set-up (the second half when opts.half2: fatigue as at half time) with
+  // common random numbers (every set-up sees the same seeds, from opts.seed). Sorted by score =
+  // wF * xG for - wA * xG against (opts.weights; chasing a game weighs attack more).
   function search(opts, onProgress) {
     const formations = opts.formations || FORMATIONS_TRY, styles = opts.styles || Object.keys(STYLES), runs = opts.runs || 5;
+    const side = opts.side || 'H', opp = side === 'H' ? 'A' : 'H', w = opts.weights || { f: 1, a: 1 }, base = opts.seed || 1000;
     const out = [], total = formations.length * styles.length; let k = 0;
     for (const f of formations) for (const s of styles) {
-      let xgd = 0, xgd2 = 0, gd = 0, xgf = 0, xga = 0, poss = 0;
+      let sc = 0, sc2 = 0, xgd = 0, gd = 0, xgf = 0, xga = 0, poss = 0;
       for (let r = 0; r < runs; r++) {
-        const m = create({ surface: opts.surface, cell: opts.cell, slots: opts.slots, seed: 1000 + r * 7919,
-          H: Object.assign({}, opts.H, { formation: f, style: s }), A: opts.A });
+        const cfg = {}; cfg[side] = Object.assign({}, opts[side], { formation: f, style: s }); cfg[opp] = opts[opp];
+        const m = create({ surface: opts.surface, cell: opts.cell, slots: opts.slots, seed: base + r * 7919, H: cfg.H, A: cfg.A });
+        if (opts.half2) { m.S.clock = 2700; m.S.half = 2; }
         m.runHalf();
-        const H = m.S.stats.H, A = m.S.stats.A;
-        xgd += H.xg - A.xg; xgd2 += (H.xg - A.xg) * (H.xg - A.xg); gd += H.goals - A.goals; xgf += H.xg; xga += A.xg; poss += H.poss / Math.max(1, H.poss + A.poss);
+        const U = m.S.stats[side], T = m.S.stats[opp], v = w.f * U.xg - w.a * T.xg;
+        sc += v; sc2 += v * v; xgd += U.xg - T.xg; gd += U.goals - T.goals; xgf += U.xg; xga += T.xg; poss += U.poss / Math.max(1, U.poss + T.poss);
       }
-      const mean = xgd / runs, sd = Math.sqrt(Math.max(0, xgd2 / runs - mean * mean));
-      out.push({ formation: f, style: s, xgd: mean, se: sd / Math.sqrt(runs), gd: gd / runs, xgf: xgf / runs, xga: xga / runs, poss: poss / runs });
+      const mean = sc / runs, sd = Math.sqrt(Math.max(0, sc2 / runs - mean * mean));
+      out.push({ formation: f, style: s, score: mean, se: sd / Math.sqrt(runs), xgd: xgd / runs, gd: gd / runs, xgf: xgf / runs, xga: xga / runs, poss: poss / runs });
       k += 1; if (onProgress) onProgress(k / total);
     }
-    return out.sort((a, b) => b.xgd - a.xgd);
+    return out.sort((a, b) => b.score - a.score);
   }
 
   return { create, search, STYLES, FORMATIONS_TRY };

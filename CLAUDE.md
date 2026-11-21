@@ -46,7 +46,11 @@ python scripts/build_site.py --game METRICA-2   # website -> docs/ (replay with 
 - Full match (playground tab, #match): demo/sim.js (SB_SIM: create/step/runHalf/setTeam/search, seeded,
   no DOM, tests/sim_test.js), demo/sim-worker.js runs search() for the half-time suggestion. Six STYLES;
   calibration harness idea: average 12+ seeded matches per matchup, aim ~9 shots, ~1.2 xG, ~80% passes.
-  Labelled a tactics toy: squads have no ratings. Best positions = model.simulate every 20 s of play.
+  Labelled a tactics toy: squads have no ratings (user sets pace/passing/finishing per player, 0.85-1.15).
+  Best positions = model.simulate every 20 s of play, for both teams (A via a mirrored pitch).
+  Fatigue per player (p.on = clock he came on), 5 subs (setTeam logs 'sub' when a named player is new),
+  offside on 3.5% of through balls. search(): side, half2, weights by score, seed; UI runs 2 workers.
+  playground.html#s=<base64> = shared set-up. replay.html?game=1|2|3 = the three open games (docs/data/clip-N.json).
 - UI "soft realism": light + dark tokens at the top of demo/style.css (dark under prefers-color-scheme
   and [data-theme]); demo/theme.js = Auto/Light/Dark toggle; canvas text off the pitch uses tok('--x').
 

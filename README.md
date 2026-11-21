@@ -16,7 +16,7 @@ about tactics with friends. English and Bahasa Indonesia, light and dark.
 | Tactics board | Match replay |
 | --- | --- |
 | [![Tactics board: Barcelona against Real Madrid, final-third attack, best moves as violet arrows](docs/img/tactics-board.jpg)](https://epinnn14.github.io/shadow-ball/playground.html) | [![Match replay: the live pitch, need-to-know cards and Shadow ratings](docs/img/replay.jpg)](https://epinnn14.github.io/shadow-ball/replay.html) |
-| Pick two LaLiga 2026/27 sides, a formation, a style and the eleven. Moments: choose a scenario (build-up, high press, mid-block, final-third attack, a ball lost high, a low block), drag players and the ball. The model shows the dangerous space owned or denied, rest defence, the three best single moves and a four-player unit move. | Fifteen minutes of a real match (Metrica Sports open data, players by number) as a bench sees it: live pitch, Shadow pitch, pressing traps, fatigue, ratings, a half-time plan, a report. |
+| Pick two LaLiga 2026/27 sides, a formation, a style and the eleven. Moments: choose a scenario (build-up, high press, mid-block, final-third attack, a ball lost high, a low block), drag players and the ball. The model shows the dangerous space owned or denied, rest defence, the three best single moves and a four-player unit move. | Fifteen minutes of a real match from any of the three Metrica Sports open games (players by number) as a bench sees it: live pitch, Shadow pitch, pressing traps, fatigue, ratings, a half-time plan, a report. |
 
 | Full match: half time |
 | --- |
@@ -137,7 +137,8 @@ high, low block), drag any player or the ball, and read the model live: dangerou
 denied, rest defence, the three best single moves and a simulated unit move of up to four players.
 Pace per player can be set; it starts at 1.00x because squads list no speeds. Squads come from each
 club's published list or its Wikipedia squad table (`data_src/laliga_2026_27.txt`, source and date
-per club); no logos or photos. `python scripts/build_playground_data.py` rebuilds the data files.
+per club; all 20 clubs have shirt numbers, and the eight oldest lists were refreshed on 21 November
+2026); no logos or photos. `python scripts/build_playground_data.py` rebuilds the data files.
 
 ### Full match
 
@@ -150,18 +151,28 @@ clearance by expected value: the gain on the same threat surface as the model ag
 losing it. Shot xG comes from distance, pressure and bodies in the way. Live: score, possession,
 shots, xG, passes, accuracy, final-third entries, balls won high, goals and big chances.
 
-- **Best positions**: every 20 s of play the board runs the model's unit move (up to three players,
-  each within 5 m) on the live positions. At a break it draws your players at their average position,
-  with and without the ball, and an arrow to where the model kept wanting each of them.
-- **Second-half suggestion**: a Web Worker (`demo/sim-worker.js`) plays every formation x style for
-  your team (48 set-ups, six 45-minute halves each, the same seeds for all) against the opponent's
-  set-up, and lists the three with the best xG difference next to your current one, flagging when the
-  gap is within the simulation noise. One click applies it.
+Players tire through the match (pressing styles faster), through balls are sometimes caught
+offside, and each side has five substitutions: change a player in the XI while the match runs or at
+half time and he comes on fresh. Click any player on the pitch for his card: pace, passing and
+finishing from 0.85x to 1.15x, so you rate the squads yourself.
 
-It is a tactics toy, not a forecast: squads carry no ratings, so players are equal apart from the
-pace you set. Calibration (12 seeds, 4-3-3 vs 4-3-3): about 9 shots, 1.2 xG and 600 passes at 80 %
-accuracy per team per match. `node tests/sim_test.js` checks determinism, the two halves, the
-ranges and the search.
+Both coach views work for either side (the team picker above the stats):
+
+- **Best positions**: every 20 s of play the board runs the model's unit move (up to three players,
+  each within 5 m) for each team on the live positions. At a break it draws the picked team at its
+  average position, with and without the ball, and an arrow to where the model kept wanting each player.
+- **Second-half suggestion**: two Web Workers (`demo/sim-worker.js`) play every formation x style for
+  the picked team (48 set-ups, ten second halves each from the half-time clock, so fatigue counts,
+  the same seeds for all) against the other side's set-up. The score sets the trade-off: behind, chances
+  made weigh 1.3 and chances given 0.7; ahead, the other way round. It lists the best three next to
+  the current set-up, flags when the gap is within the simulation noise, and one click applies it.
+- **Copy link**: the two set-ups (clubs, formations, styles, XIs, ratings) in a link that opens the
+  board the same way on another device.
+
+It is a tactics toy, not a forecast: squads carry no ratings until you set them. Calibration (12 seeds,
+4-3-3 vs 4-3-3): about 9 shots, 1.3 xG, 570 passes at 79 % accuracy, 3-4 corners, 2-3 offsides and
+about 28 tackles per team per match. `node tests/sim_test.js` checks determinism, the two halves,
+the ranges, substitutions, finishing and the search.
 
 The whole interface follows the device's light or dark setting (or the Auto / Light / Dark button).
 

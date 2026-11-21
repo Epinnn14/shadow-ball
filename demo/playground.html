@@ -6,11 +6,11 @@
 <title>Shadow Ball Tactics Board</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Work+Sans:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="style.css?v=20261123a">
-<link rel="stylesheet" href="playground.css?v=20261123a">
-<script src="theme.js?v=20261123a"></script>
-<script src="i18n-id.js?v=20261123a"></script>
-<script src="i18n.js?v=20261123a"></script>
+<link rel="stylesheet" href="style.css?v=20261124a">
+<link rel="stylesheet" href="playground.css?v=20261124a">
+<script src="theme.js?v=20261124a"></script>
+<script src="i18n-id.js?v=20261124a"></script>
+<script src="i18n.js?v=20261124a"></script>
 </head>
 <body class="pg">
 <header class="bar">
@@ -81,6 +81,8 @@
       </div>
       <button type="button" class="ghost" id="skipBtn">Skip to half time</button>
       <button type="button" class="ghost" id="newBtn">New match</button>
+      <button type="button" class="ghost" id="shareBtn">Copy link</button>
+      <input class="pg-link" id="shareLink" readonly hidden aria-label="Link to this set-up">
     </div>
     <div class="pg-tools m-only">
       <button type="button" class="primary accent" id="simBtn">Simulate best unit move</button>
@@ -92,6 +94,7 @@
 
   <!-- results -->
   <aside class="pg-side-col">
+    <div class="seg pg-for x-only" role="group" aria-label="Analyse for"><button type="button" data-for="H" class="on" id="forH">—</button><button type="button" data-for="A" id="forA">—</button></div>
     <section class="card x-only">
       <header><h2>Match stats</h2><span class="note" id="statsNote"></span></header>
       <div class="pg-poss" aria-hidden="true"><i id="possBar"></i></div>
@@ -109,7 +112,7 @@
         <div class="seg pg-phase" role="group" aria-label="Phase"><button type="button" data-phase="in" class="on">With the ball</button><button type="button" data-phase="out">Without it</button></div>
       </header>
       <ol class="pg-moves" id="bestList"></ol>
-      <p class="note">Every 20 seconds of play the model looks for the best moves for your team (each player within 5 m). Arrows on the pitch, with the layer on, go from a player's average position to where it kept wanting him.</p>
+      <p class="note">Every 20 seconds of play the model looks for the best moves for each team (each player within 5 m). At a break, with the layer on, the pitch shows the picked team at its average positions, with arrows to where the model kept wanting each player.</p>
     </section>
     <section class="card x-only">
       <header><h2>Events</h2></header>
@@ -138,7 +141,13 @@
       <label class="field">Pace in the model <output id="paceOut">1.00×</output>
         <input type="range" id="pace" min="0.85" max="1.15" step="0.01" value="1">
       </label>
-      <p class="note">Pace scales his top speed in the pitch-control model (1.00× = 5 m/s). Squads list no speeds, so every player starts at 1.00×.</p>
+      <label class="field">Passing <output id="passingOut">1.00×</output>
+        <input type="range" id="passing" min="0.85" max="1.15" step="0.01" value="1">
+      </label>
+      <label class="field">Finishing <output id="finishingOut">1.00×</output>
+        <input type="range" id="finishing" min="0.85" max="1.15" step="0.01" value="1">
+      </label>
+      <p class="note">Pace scales his top speed (1.00× = 5 m/s) in the model and the match. Passing changes how often his passes arrive, finishing how often his shots go in; both count in the full match only. Squads carry no ratings, so everyone starts at 1.00×: rate the players yourself.</p>
     </section>
     <section class="card pg-about x-only">
       <h2>How the match works</h2>
@@ -154,12 +163,12 @@
 </main>
 <footer class="source">Squads: each club's published list or its Wikipedia squad table, 2026/27 (source and date per club in the team panel). No club logos or player photos. Threat model: Metrica Sports open sample data. Shadow Ball by <a href="https://github.com/Epinnn14">epinnn</a>.</footer>
 
-<script src="data.js?v=20261123a"></script>
-<script src="laliga.js?v=20261123a"></script>
-<script src="threat.js?v=20261123a"></script>
-<script src="model.js?v=20261123a"></script>
-<script src="sim.js?v=20261123a"></script>
-<script src="pitch.js?v=20261123a"></script>
-<script src="playground.js?v=20261123a"></script>
+<script src="data.js?v=20261124a"></script>
+<script src="laliga.js?v=20261124a"></script>
+<script src="threat.js?v=20261124a"></script>
+<script src="model.js?v=20261124a"></script>
+<script src="sim.js?v=20261124a"></script>
+<script src="pitch.js?v=20261124a"></script>
+<script src="playground.js?v=20261124a"></script>
 </body>
 </html>

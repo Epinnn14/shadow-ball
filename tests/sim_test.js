@@ -41,4 +41,21 @@ const res = SIM.search(Object.assign({ runs: 2, formations: ['4-3-3', '4-4-2'], 
 assert.strictEqual(res.length, 4); assert.strictEqual(calls, 4);
 for (let i = 1; i < res.length; i++) assert.ok(res[i - 1].xgd >= res[i].xgd);
 assert.ok(res.every((r) => r.se >= 0 && Number.isFinite(r.xgd)));
+// a substitution at half time is logged and the new player starts fresh
+const sub = SIM.create(Object.assign({ seed: 5, H: { formation: '4-3-3', style: 'press', names: { ST: 'Nine' } }, A: sym }, base)); sub.runHalf();
+sub.setTeam('H', { formation: '4-3-3', style: 'press', names: { ST: 'Fresh' } });
+const subEv = sub.S.events.filter((e) => e.kind === 'sub');
+assert.strictEqual(subEv.length, 1); assert.strictEqual(subEv[0].who, 'Fresh'); assert.strictEqual(subEv[0].off, 'Nine');
+assert.strictEqual(sub.S.stats.H.subs, 1);
+assert.ok(sub.S.players.find((p) => p.name === 'Fresh').on >= 2700);
+// changing formation or style with the same players is not a substitution
+sub.setTeam('H', { formation: '4-4-2', style: 'counter', names: { ST: 'Fresh' } }); assert.strictEqual(sub.S.stats.H.subs, 1);
+
+// finishing changes goals, not the chances: same seed, same xG
+const fin = (f) => { const m = SIM.create(Object.assign({ seed: 9, H: Object.assign({}, sym, { finishing: { ST: f, LW: f, RW: f } }), A: sym }, base)); m.runHalf(); m.runHalf(); return m.S.stats.H; };
+const lo = fin(0.85), hi = fin(1.15); assert.ok(Math.abs(lo.xg - hi.xg) < 1e-9 && lo.shots === hi.shots);
+
+// the search can play either side, from the second half, with weights
+const resA = SIM.search(Object.assign({ runs: 2, side: 'A', half2: true, weights: { f: 1.3, a: 0.7 }, formations: ['4-3-3', '4-4-2'], styles: ['low'], H: sym, A: sym }, base));
+assert.strictEqual(resA.length, 2); assert.ok(resA[0].score >= resA[1].score);
 console.log('sim ok', JSON.stringify(Object.fromEntries(Object.entries(avg).map(([k, v]) => [k, +v.toFixed(2)]))));
